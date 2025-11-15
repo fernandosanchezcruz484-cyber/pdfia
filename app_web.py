@@ -1,7 +1,7 @@
 # --- IMPORTACIONES ---
 import io
 import html
-import re  # Importante para la corrección de '###'
+import re  # Importante
 import traceback
 from datetime import datetime
 from flask import Flask, request, send_file, render_template_string
@@ -20,8 +20,7 @@ import reportlab
 import curl_cffi
 
 # --- CONTENIDO HTML (Front-End) ---
-# --- ¡NUEVA INTERFAZ "HERMOSA" Y PROFESIONAL! ---
-
+# (Usamos la misma interfaz "hermosa" de la v2.0)
 HTML_INTERFAZ = """
 <!DOCTYPE html>
 <html lang="es">
@@ -218,7 +217,7 @@ HTML_INTERFAZ = """
 
 
 # --- LÓGICA DE IA (Back-End) ---
-# --- ¡PROMPT MEJORADO CON BIBLIOGRAFÍA! ---
+# (Prompt mejorado con bibliografía)
 def obtener_respuesta_ia(tema, contexto_extra):
     try:
         if contexto_extra and len(contexto_extra) > 5:
@@ -255,7 +254,7 @@ def obtener_respuesta_ia(tema, contexto_extra):
 
 
 # --- LÓGICA DE PDF (Back-End) ---
-# --- ¡VERSIÓN CORREGIDA PARA '###' Y '**'! ---
+# --- ¡¡VERSIÓN CORREGIDA (v2.1)!! ---
 def generar_pdf_profesional(nombre, matricula, fecha, tema, contenido):
     try:
         buffer = io.BytesIO()
@@ -266,7 +265,7 @@ def generar_pdf_profesional(nombre, matricula, fecha, tema, contenido):
         estilos = getSampleStyleSheet()
         elementos = []
 
-        # Paleta de colores profesional
+        # Paleta de colores
         color_titulo = colors.HexColor("#1F2937") 
         color_acento = colors.HexColor("#2563EB") 
         color_texto = colors.HexColor("#374151")  
@@ -293,12 +292,17 @@ def generar_pdf_profesional(nombre, matricula, fecha, tema, contenido):
         elementos.append(t)
         elementos.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey, spaceAfter=20))
         
-        # 2. Contenido de la IA (¡CON CORRECCIÓN!)
-        txt = html.escape(contenido)
+        # 2. Contenido de la IA (¡CON LA CORRECCIÓN DEFINITIVA!)
+        
+        # Empezamos directamente con el contenido de la IA
+        txt = contenido
         
         # --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
+        # (Se eliminó la línea html.escape() que causaba el problema)
+        
         # Reemplaza '### Título' por '<b>Título</b>'
-        txt = re.sub(r'(?m)^#+\s*(.*?)$', r'<b>\1</b>', txt)
+        # La 'm' al principio de (r'(?m)...') es clave para que funcione en múltiples líneas
+        txt = re.sub(r'(?m)^#+\s*(.*?)$', r'<b>\1</b>', txt) 
         
         # Reemplaza saltos de línea por <br/>
         txt = txt.replace("\n", "<br/>")
@@ -309,6 +313,8 @@ def generar_pdf_profesional(nombre, matricula, fecha, tema, contenido):
             txt = txt.replace("**", "</b>", 1)
         # --- Fin de la corrección ---
         
+        # La librería Paragraph es segura y renderizará el <b> y <br/>
+        # sin ejecutar código malicioso (escapará lo que no entienda).
         elementos.append(Paragraph(txt, estilo_cuerpo))
         
         # Construir el documento

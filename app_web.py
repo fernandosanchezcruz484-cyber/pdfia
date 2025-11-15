@@ -1,5 +1,5 @@
 # --- IMPORTACIONES ---
-# Ya no necesitamos 'asyncio'
+# (Nota: El 'try...except' de g4f ha sido eliminado)
 import io
 import html
 import re
@@ -14,15 +14,13 @@ from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT, TA_CENTER
 
-try:
-    import g4f
-except ImportError:
-    print("="*50)
-    print("ERROR: Faltan bibliotecas.")
-    print("Ejecuta este comando en tu terminal:")
-    print("pip install g4f flask reportlab curl_cffi")
-    print("="*50)
-    exit()
+# Importamos las librerías directamente.
+# Si esto falla en Render, ahora veremos el error REAL.
+import g4f
+import flask
+import reportlab
+import curl_cffi
+
 
 # --- CONTENIDO HTML (Front-End) ---
 HTML_INTERFAZ = """
@@ -123,7 +121,6 @@ HTML_INTERFAZ = """
 """
 
 # --- LÓGICA DE IA (Back-End) ---
-# ¡CAMBIO! Esta función ahora es SÍNCRONA (no 'async')
 def obtener_respuesta_ia(tema, contexto_extra):
     try:
         if contexto_extra and len(contexto_extra) > 5:
@@ -141,7 +138,6 @@ def obtener_respuesta_ia(tema, contexto_extra):
             )
             mensaje_usuario = f"Informe sobre: {tema}"
 
-        # ¡CAMBIO! Usamos .create (síncrono) en lugar de .create_async (asíncrono)
         response = g4f.ChatCompletion.create(
             model=g4f.models.gpt_4,
             messages=[
@@ -157,7 +153,6 @@ def obtener_respuesta_ia(tema, contexto_extra):
         return f"Error generando respuesta: {str(e)}"
 
 # --- LÓGICA DE PDF (Back-End) ---
-# (Esta función ya estaba bien, pero la dejamos igual)
 def generar_pdf_profesional(nombre, matricula, fecha, tema, contenido):
     try:
         buffer = io.BytesIO()
@@ -189,7 +184,6 @@ def generar_pdf_profesional(nombre, matricula, fecha, tema, contenido):
         elementos.append(t)
         elementos.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey, spaceAfter=20))
         
-        # Limpieza de HTML y formato
         txt = html.escape(contenido)
         txt = txt.replace("\n", "<br/>")
         while "**" in txt:
@@ -207,39 +201,31 @@ def generar_pdf_profesional(nombre, matricula, fecha, tema, contenido):
         return None
 
 # --- SERVIDOR WEB (Flask) ---
-
 app = Flask(__name__)
 
-# Ruta 1: Muestra la página web (el HTML de arriba)
 @app.route('/')
 def index():
     return render_template_string(HTML_INTERFAZ)
 
-# Ruta 2: Recibe los datos, genera el PDF y lo envía
 @app.route('/generar', methods=['POST'])
 def generar_informe():
     try:
-        # 1. Obtener datos
         nombre = request.form['nombre']
         matricula = request.form['matricula']
         fecha = request.form['fecha']
         tema = request.form['tema']
         contexto = request.form['contexto']
 
-        # 2. Llamar a la lógica de IA (¡ahora es síncrona!)
-        # Ya no necesitamos 'consultar_ia_sync'
         respuesta = obtener_respuesta_ia(tema, contexto)
 
         if not respuesta or "Error" in respuesta:
             return f"Error de la IA: {respuesta}", 500 
 
-        # 3. Llamar a la lógica de PDF
         pdf_bytes = generar_pdf_profesional(nombre, matricula, fecha, tema, respuesta)
         
         if pdf_bytes is None:
             return "Error creando el PDF", 500
 
-        # 4. Enviar el PDF al navegador
         return send_file(
             io.BytesIO(pdf_bytes),
             mimetype='application/pdf',
@@ -254,5 +240,4 @@ def generar_informe():
 if __name__ == '__main__':
     print("Iniciando servidor web...")
     print("Abre tu navegador y ve a: http://127.0.0.1:5000")
-    # app.run() mantiene el programa corriendo para aceptar peticiones
     app.run(debug=True, port=5000)

@@ -3,3 +3,4 @@ g4f
 reportlab
 curl_cffi
 gunicorn
+typing_extensions

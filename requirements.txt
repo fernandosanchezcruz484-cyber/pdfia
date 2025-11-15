@@ -1,1 +1,5 @@
-
+flask
+g4f
+reportlab
+curl_cffi
+gunicorn

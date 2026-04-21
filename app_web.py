@@ -129,7 +129,6 @@ HTML_INTERFAZ = """
 """
 
 def limpiar_formato_ia(texto):
-    texto = re.sub(r'\', '', texto)
     texto = re.sub(r'(?m)^### (.*?)$', r'<br/><font size="12"><b>\1</b></font>', texto)
     texto = re.sub(r'(?m)^## (.*?)$', r'<br/><font size="14"><b>\1</b></font>', texto)
     texto = re.sub(r'(?m)^# (.*?)$', r'<br/><font size="16"><b>\1</b></font>', texto)

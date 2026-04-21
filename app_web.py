@@ -1,121 +1,71 @@
 import io
 import os
 import re
+import requests
 from datetime import datetime
 from flask import Flask, request, send_file, render_template_string
 
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 
-from groq import Groq
-
-# --- CONEXIÓN SEGURA ---
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-
 app = Flask(__name__)
 
-# --- INTERFAZ PREMIUM ---
+# --- CONFIGURACIÓN DIRECTA ---
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+
+# --- DISEÑO WEB UCATECI ---
 HTML_INTERFAZ = """
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generador Académico V6.0 | UCATECI</title>
+    <title>Generador UCATECI | Fernando Sánchez</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-        :root { --primary: #0f172a; --accent: #3b82f6; --bg: #e2e8f0; }
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); display: flex; justify-content: center; padding: 40px 15px; color: #0f172a; min-height: 100vh; }
-        .card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 40px; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15); width: 100%; max-width: 700px; border: 1px solid rgba(255,255,255,0.5); }
-        header { text-align: center; margin-bottom: 30px; }
-        h1 { font-size: 30px; font-weight: 800; color: var(--primary); margin-bottom: 5px; }
-        .badge { background: #000000; color: #facc15; padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 800; margin-bottom: 10px; display: inline-block; border: 1px solid #facc15; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .form-group { margin-bottom: 15px; }
-        .full { grid-column: span 2; }
-        label { display: block; margin-bottom: 6px; font-weight: 700; font-size: 13px; color: #334155; text-transform: uppercase; }
-        input, textarea, select { width: 100%; padding: 12px 15px; border: 2px solid #cbd5e1; border-radius: 12px; font-size: 14px; background: #f8fafc; font-family: inherit; box-sizing: border-box; }
-        button { width: 100%; padding: 18px; background: var(--primary); color: white; border: none; border-radius: 14px; font-weight: 800; font-size: 16px; cursor: pointer; transition: 0.3s; margin-top: 10px; }
-        button:hover { background: var(--accent); transform: translateY(-2px); box-shadow: 0 10px 20px -5px rgba(59, 130, 246, 0.4); }
-        .loader { display: none; text-align: center; color: var(--accent); margin-top: 20px; }
-        .spinner { width: 30px; height: 30px; border: 4px solid #e2e8f0; border-top: 4px solid var(--accent); border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f1f5f9; display: flex; justify-content: center; padding: 20px; }
+        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 600px; }
+        h1 { color: #1e293b; text-align: center; font-size: 24px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        label { display: block; margin: 10px 0 5px; font-weight: 600; font-size: 12px; color: #475569; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; background: #2563eb; color: white; border: none; border-radius: 10px; font-weight: 800; margin-top: 20px; cursor: pointer; }
+        #loading { display: none; text-align: center; color: #2563eb; font-weight: bold; margin-top: 10px; }
     </style>
 </head>
 <body>
     <div class="card">
-        <header>
-            <span class="badge">VERSIÓN 6.0 - ANTI-ERRORES</span>
-            <h1>Redactor Académico Pro</h1>
-            <p>Generador de Reportes UCATECI</p>
-        </header>
-        <form id="pdfForm" action="/generar" method="POST">
+        <h1>Generador de Trabajos UCATECI</h1>
+        <p style="text-align:center; font-size:12px; color:green;">VERSIÓN MANUAL (CONEXIÓN DIRECTA)</p>
+        <form id="f" action="/generar" method="POST">
             <div class="grid">
-                <div class="form-group">
-                    <label>Logo:</label>
-                    <select name="logo_filename">
-                        <option value="ucateci.png">UCATECI</option>
-                        <option value="pucmm.png">PUCMM</option>
-                        <option value="uasd.png">UASD</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Facultad:</label>
-                    <select name="facultad" id="facultad" onchange="actualizarEscuelas()" required>
-                        <option value="">-- Seleccione --</option>
-                        <option value="Facultad de las Ingenierías">Ingenierías</option>
-                        <option value="Facultad de Ciencias de la Salud">Salud</option>
-                        <option value="Facultad de Ciencias Sociales">Ciencias Sociales</option>
-                    </select>
-                </div>
-                <div class="form-group full">
-                    <label>Escuela:</label>
-                    <select name="escuela" id="escuela" required>
-                        <option value="">Primero elija una facultad</option>
-                    </select>
-                </div>
-                <div class="form-group full">
+                <div style="grid-column: span 2;">
                     <label>Tema del Trabajo:</label>
                     <input type="text" name="tema" required>
                 </div>
-                <div class="form-group">
+                <div>
                     <label>Asignatura:</label>
                     <input type="text" name="asignatura" required>
                 </div>
-                <div class="form-group">
+                <div>
                     <label>Docente:</label>
                     <input type="text" name="profesor" required>
                 </div>
-                <div class="form-group full">
-                    <label>Integrantes (Nombre y Matrícula):</label>
+                <div style="grid-column: span 2;">
+                    <label>Estudiantes (Nombre y Matrícula):</label>
                     <textarea name="estudiantes" required></textarea>
                 </div>
             </div>
-            <button type="submit" id="submitBtn">Generar Trabajo Final</button>
-            <div id="loading" class="loader">
-                <div class="spinner"></div>
-                <p><b>La IA está escribiendo... por favor espera.</b></p>
-            </div>
+            <button type="submit" id="b">GENERAR PDF AHORA</button>
+            <div id="loading">Redactando con Llama 3.1... espera un momento.</div>
         </form>
     </div>
     <script>
-        const escuelas = {
-            "Facultad de las Ingenierías": ["Escuela de Ingeniería Industrial", "Escuela de Ingeniería de Sistemas", "Escuela de Ingeniería Civil"],
-            "Facultad de Ciencias de la Salud": ["Escuela de Medicina", "Escuela de Enfermería"],
-            "Facultad de Ciencias Sociales": ["Escuela de Administración", "Escuela de Psicología"]
-        };
-        function actualizarEscuelas() {
-            const fac = document.getElementById("facultad").value;
-            const esc = document.getElementById("escuela");
-            esc.innerHTML = "";
-            if (fac) { escuelas[fac].forEach(e => { let op = document.createElement("option"); op.value = e; op.text = e; esc.add(op); }); }
-        }
-        document.getElementById('pdfForm').onsubmit = () => {
-            document.getElementById('submitBtn').style.display = 'none';
+        document.getElementById('f').onsubmit = () => {
+            document.getElementById('b').style.display = 'none';
             document.getElementById('loading').style.display = 'block';
         };
     </script>
@@ -123,73 +73,50 @@ HTML_INTERFAZ = """
 </html>
 """
 
-def generar_contenido_ia(tema, asignatura, instrucciones):
-    if not client: return "Error: Configura la GROQ_API_KEY en Render."
-    prompt = f"Redacta un informe académico formal sobre {tema} para {asignatura}. Usa primera persona plural. Bibliografía APA 7."
+def llamar_ia_manual(tema, asignatura):
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "user", "content": f"Redacta un informe académico formal sobre {tema} para la asignatura {asignatura}. Usa primera persona del plural. Al final pon Bibliografía APA 7."}
+        ],
+        "temperature": 0.5
+    }
     
     try:
-        response = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant",
-            temperature=0.5
-        )
-        
-        # --- EXTRACCIÓN NIVEL INGENIERÍA (IMPOSIBLE QUE FALLE) ---
-        # Paso 1: Convertimos la respuesta a un diccionario pase lo que pase
-        try:
-            res_dict = response.model_dump() if hasattr(response, 'model_dump') else dict(response)
-        except:
-            res_dict = response
-
-        # Paso 2: Navegación ultra-segura con .get()
-        if isinstance(res_dict, list): res_dict = res_dict
-        
-        choices = res_dict.get('choices', [])
-        if not choices:
-            # Si no hay 'choices', probamos si el objeto es directamente el mensaje
-            return str(res_dict)
-
-        first_choice = choices
-        message = first_choice.get('message', {})
-        content = message.get('content', '')
-
-        if content:
-            return content
-        return "La IA respondió pero el contenido está vacío."
-        
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        datos = response.json()
+        # Aquí no hay error de lista, vamos directo al grano:
+        return datos['choices']['message']['content']
     except Exception as e:
-        return f"Error en la conexión con la IA: {str(e)}"
+        return f"Error en conexión manual: {str(e)}"
 
 def crear_pdf(datos, contenido_ia):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2.5*cm, leftMargin=2.5*cm, topMargin=2*cm, bottomMargin=2*cm)
     styles = getSampleStyleSheet()
-    st_cent = ParagraphStyle('Cent', parent=styles['Normal'], fontSize=12, alignment=TA_CENTER)
-    st_bold = ParagraphStyle('BoldC', parent=st_cent, fontName='Helvetica-Bold', fontSize=12)
-    st_body = ParagraphStyle('Body', parent=styles['Normal'], fontSize=11, leading=14, alignment=TA_JUSTIFY)
-    elements = []
-
-    # Portada
-    elements.append(Paragraph("<b>UNIVERSIDAD CATÓLICA DEL CIBAO (UCATECI)</b>", st_cent))
-    elements.append(Spacer(1, 1*cm))
-    elements.append(Paragraph(f"<b>{datos.get('facultad', '')}</b>", st_bold))
-    elements.append(Paragraph(f"<b>{datos.get('escuela', '')}</b>", st_bold))
-    elements.append(Spacer(1, 4*cm))
-    elements.append(Paragraph(f"<b>TEMA: {datos.get('tema', '').upper()}</b>", st_cent))
-    elements.append(Spacer(1, 4*cm))
-    elements.append(Paragraph("<b>Presentado por:</b>", st_bold))
-    elements.append(Paragraph(datos.get('estudiantes', '').replace('\n', '<br/>'), st_cent))
-    elements.append(Spacer(1, 1*cm))
-    elements.append(Paragraph(f"<b>Docente:</b> {datos.get('profesor', '')}", st_cent))
-    elements.append(Spacer(1, 3*cm))
-    elements.append(Paragraph(f"La Vega, R.D. - {datetime.now().year}", st_cent))
+    st_cent = ParagraphStyle('C', parent=styles['Normal'], fontSize=12, alignment=TA_CENTER)
+    st_body = ParagraphStyle('B', parent=styles['Normal'], fontSize=11, leading=14, alignment=TA_JUSTIFY)
     
+    elements = []
+    # Portada básica pero funcional
+    elements.append(Paragraph("<b>UNIVERSIDAD CATÓLICA DEL CIBAO (UCATECI)</b>", st_cent))
+    elements.append(Spacer(1, 4*cm))
+    elements.append(Paragraph(f"<b>TEMA: {datos['tema'].upper()}</b>", st_cent))
+    elements.append(Spacer(1, 4*cm))
+    elements.append(Paragraph(f"<b>Estudiantes:</b><br/>{datos['estudiantes'].replace('\\n', '<br/>')}", st_cent))
+    elements.append(Spacer(1, 1*cm))
+    elements.append(Paragraph(f"<b>Docente:</b> {datos['profesor']}", st_cent))
     elements.append(PageBreak())
     
-    # Texto del trabajo
-    texto = contenido_ia.replace('\n', '<br/>')
-    texto = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', texto)
-    elements.append(Paragraph(texto, st_body))
+    # Contenido
+    c_limpio = contenido_ia.replace('\n', '<br/>')
+    c_limpio = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', c_limpio)
+    elements.append(Paragraph(c_limpio, st_body))
     
     doc.build(elements)
     buffer.seek(0)
@@ -201,10 +128,10 @@ def index(): return render_template_string(HTML_INTERFAZ)
 @app.route('/generar', methods=['POST'])
 def generar():
     try:
-        datos = request.form.to_dict()
-        contenido = generar_contenido_ia(datos.get('tema', ''), datos.get('asignatura', ''), '')
-        pdf = crear_pdf(datos, contenido)
-        return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name="Trabajo_UCATECI.pdf")
+        d = request.form.to_dict()
+        texto = llamar_ia_manual(d['tema'], d['asignatura'])
+        pdf = crear_pdf(d, texto)
+        return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name="Trabajo.pdf")
     except Exception as e:
         return f"Error crítico: {str(e)}", 500
 

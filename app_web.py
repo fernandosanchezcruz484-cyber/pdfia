@@ -25,7 +25,7 @@ HTML_INTERFAZ = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generador Académico V5.0 | UCATECI</title>
+    <title>Generador Académico V6.0 | UCATECI</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         :root { --primary: #0f172a; --accent: #3b82f6; --bg: #e2e8f0; }
@@ -33,7 +33,7 @@ HTML_INTERFAZ = """
         .card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 40px; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15); width: 100%; max-width: 700px; border: 1px solid rgba(255,255,255,0.5); }
         header { text-align: center; margin-bottom: 30px; }
         h1 { font-size: 30px; font-weight: 800; color: var(--primary); margin-bottom: 5px; }
-        .badge { background: #10b981; color: white; padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 700; margin-bottom: 10px; display: inline-block; }
+        .badge { background: #000000; color: #facc15; padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 800; margin-bottom: 10px; display: inline-block; border: 1px solid #facc15; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .form-group { margin-bottom: 15px; }
         .full { grid-column: span 2; }
@@ -49,14 +49,14 @@ HTML_INTERFAZ = """
 <body>
     <div class="card">
         <header>
-            <span class="badge">CONEXIÓN V5.0 - ESTABLE</span>
+            <span class="badge">VERSIÓN 6.0 - ANTI-ERRORES</span>
             <h1>Redactor Académico Pro</h1>
-            <p>Generador de Informes para la UCATECI</p>
+            <p>Generador de Reportes UCATECI</p>
         </header>
         <form id="pdfForm" action="/generar" method="POST">
             <div class="grid">
                 <div class="form-group">
-                    <label>Logo Universidad:</label>
+                    <label>Logo:</label>
                     <select name="logo_filename">
                         <option value="ucateci.png">UCATECI</option>
                         <option value="pucmm.png">PUCMM</option>
@@ -80,7 +80,7 @@ HTML_INTERFAZ = """
                 </div>
                 <div class="form-group full">
                     <label>Tema del Trabajo:</label>
-                    <input type="text" name="tema" placeholder="Ej. El impacto de la IA en la sociedad" required>
+                    <input type="text" name="tema" required>
                 </div>
                 <div class="form-group">
                     <label>Asignatura:</label>
@@ -92,13 +92,13 @@ HTML_INTERFAZ = """
                 </div>
                 <div class="form-group full">
                     <label>Integrantes (Nombre y Matrícula):</label>
-                    <textarea name="estudiantes" placeholder="Fernando Sánchez, 2024-xxxx" required></textarea>
+                    <textarea name="estudiantes" required></textarea>
                 </div>
             </div>
-            <button type="submit" id="submitBtn">Generar PDF Académico</button>
+            <button type="submit" id="submitBtn">Generar Trabajo Final</button>
             <div id="loading" class="loader">
                 <div class="spinner"></div>
-                <p><b>Groq está redactando...</b></p>
+                <p><b>La IA está escribiendo... por favor espera.</b></p>
             </div>
         </form>
     </div>
@@ -125,7 +125,7 @@ HTML_INTERFAZ = """
 
 def generar_contenido_ia(tema, asignatura, instrucciones):
     if not client: return "Error: Configura la GROQ_API_KEY en Render."
-    prompt = f"Redacta un informe académico formal sobre {tema} para la asignatura {asignatura}. Usa primera persona del plural. Incluye Bibliografía APA 7."
+    prompt = f"Redacta un informe académico formal sobre {tema} para {asignatura}. Usa primera persona plural. Bibliografía APA 7."
     
     try:
         response = client.chat.completions.create(
@@ -134,18 +134,28 @@ def generar_contenido_ia(tema, asignatura, instrucciones):
             temperature=0.5
         )
         
-        # --- EXTRACTOR UNIVERSAL BLINDADO ---
-        # Si response es un objeto con .choices
-        if hasattr(response, 'choices'):
-            choice = response.choices
-            # Si choice tiene .message
-            if hasattr(choice, 'message'):
-                return choice.message.content
-            # Si choice es un diccionario
-            return choice['message']['content']
-            
-        # Si response es un diccionario crudo
-        return response['choices']['message']['content']
+        # --- EXTRACCIÓN NIVEL INGENIERÍA (IMPOSIBLE QUE FALLE) ---
+        # Paso 1: Convertimos la respuesta a un diccionario pase lo que pase
+        try:
+            res_dict = response.model_dump() if hasattr(response, 'model_dump') else dict(response)
+        except:
+            res_dict = response
+
+        # Paso 2: Navegación ultra-segura con .get()
+        if isinstance(res_dict, list): res_dict = res_dict
+        
+        choices = res_dict.get('choices', [])
+        if not choices:
+            # Si no hay 'choices', probamos si el objeto es directamente el mensaje
+            return str(res_dict)
+
+        first_choice = choices
+        message = first_choice.get('message', {})
+        content = message.get('content', '')
+
+        if content:
+            return content
+        return "La IA respondió pero el contenido está vacío."
         
     except Exception as e:
         return f"Error en la conexión con la IA: {str(e)}"
@@ -159,7 +169,7 @@ def crear_pdf(datos, contenido_ia):
     st_body = ParagraphStyle('Body', parent=styles['Normal'], fontSize=11, leading=14, alignment=TA_JUSTIFY)
     elements = []
 
-    # Portada UCATECI
+    # Portada
     elements.append(Paragraph("<b>UNIVERSIDAD CATÓLICA DEL CIBAO (UCATECI)</b>", st_cent))
     elements.append(Spacer(1, 1*cm))
     elements.append(Paragraph(f"<b>{datos.get('facultad', '')}</b>", st_bold))
@@ -176,7 +186,7 @@ def crear_pdf(datos, contenido_ia):
     
     elements.append(PageBreak())
     
-    # Cuerpo del trabajo
+    # Texto del trabajo
     texto = contenido_ia.replace('\n', '<br/>')
     texto = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', texto)
     elements.append(Paragraph(texto, st_body))
@@ -194,7 +204,7 @@ def generar():
         datos = request.form.to_dict()
         contenido = generar_contenido_ia(datos.get('tema', ''), datos.get('asignatura', ''), '')
         pdf = crear_pdf(datos, contenido)
-        return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name="Trabajo_Academico.pdf")
+        return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name="Trabajo_UCATECI.pdf")
     except Exception as e:
         return f"Error crítico: {str(e)}", 500
 

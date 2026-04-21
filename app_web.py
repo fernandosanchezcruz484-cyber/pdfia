@@ -10,11 +10,11 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 
-# --- IMPORTAMOS LA IA OFICIAL DE GOOGLE ---
-import google.generativeai as genai
+from groq import Groq
 
-# --- CONFIGURACIÓN DIRECTA DE TU API KEY ---
-genai.configure(api_key="AIzaSyDXjHSNVO-yhHAo6-KfYq5c6-2dFxu5Zc4")
+# --- EL CÓDIGO BUSCA LA LLAVE EN LA CAJA FUERTE DE RENDER ---
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 app = Flask(__name__)
 
@@ -88,7 +88,7 @@ HTML_INTERFAZ = """
     <div class="card">
         <header>
             <h1>Redactor Académico Pro</h1>
-            <p class="subtitle">Desarrollado con Google Gemini AI</p>
+            <p class="subtitle">Motor: Groq (Llama 3 Ultra-Rápido)</p>
         </header>
         
         <form id="pdfForm" action="/generar" method="POST">
@@ -141,7 +141,7 @@ HTML_INTERFAZ = """
             <button type="submit" id="submitBtn">Generar Documento PDF</button>
             <div id="loading" class="loader">
                 <div class="spinner"></div>
-                <p><b>Gemini está redactando tu trabajo...</b><br>Esto tomará unos pocos segundos.</p>
+                <p><b>Groq está redactando a máxima velocidad...</b><br>Estará listo en segundos.</p>
             </div>
         </form>
     </div>
@@ -186,29 +186,30 @@ def limpiar_formato_ia(texto):
     return texto
 
 def generar_contenido_ia(tema, asignatura, instrucciones):
+    if not client:
+        return "Error Crítico: No configuraste la GROQ_API_KEY en Render."
+
     prompt = (
         f"Eres un estudiante universitario realizando un trabajo final sobre: '{tema}'. "
         f"Asignatura: {asignatura}. "
         f"Instrucciones a responder: {instrucciones if instrucciones else 'Desarrolla el tema de forma profunda, formal y académica.'}. "
         f"REGLAS ESTRICTAS: "
         f"1. Redacta en PRIMERA PERSONA DEL PLURAL ('Investigamos', 'Concluimos'). "
-        f"2. NADA de saludos, inicia directo con el texto. "
+        f"2. NADA de saludos ni introducciones conversacionales, inicia directo con el texto del trabajo. "
         f"3. NO uses el símbolo ## ni asteriscos (**) para los títulos, simplemente escribe los títulos en MAYÚSCULAS. "
         f"4. Al final añade 'Bibliografía' con 3 fuentes reales en formato APA 7. "
-        f"5. DEVUELVE ÚNICAMENTE EL TEXTO FINAL. NO uses formato JSON, NO expliques tu proceso."
+        f"5. DEVUELVE ÚNICAMENTE EL TEXTO FINAL. NO uses formato JSON."
     )
     
     try:
-        # EL ARREGLO MÁGICO: Usamos el modelo universal y estable "gemini-pro"
-        model = genai.GenerativeModel('gemini-pro')
-        response = model.generate_content(prompt)
-        
-        if response.text:
-            return response.text
-        else:
-            return "Error: Gemini no devolvió texto."
+        response = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama3-8b-8192", 
+            temperature=0.5
+        )
+        return response.choices.message.content
     except Exception as e:
-        return f"Error con la API de Gemini: {str(e)}"
+        return f"Error con la API de Groq: {str(e)}"
 
 def obtener_fecha_espanol():
     meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]

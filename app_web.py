@@ -174,7 +174,6 @@ HTML_INTERFAZ = """
 # --- PARSER DE MARKDOWN A REPORTLAB ---
 def limpiar_formato_ia(texto):
     # Filtro estricto para eliminar cualquier rastro de código Markdown y dejar texto puro
-    texto = re.sub(r'\', '', texto)
     texto = re.sub(r'(?m)^### (.*?)$', r'<br/><font size="12"><b>\1</b></font>', texto)
     texto = re.sub(r'(?m)^## (.*?)$', r'<br/><font size="14"><b>\1</b></font>', texto)
     texto = re.sub(r'(?m)^# (.*?)$', r'<br/><font size="16"><b>\1</b></font>', texto)

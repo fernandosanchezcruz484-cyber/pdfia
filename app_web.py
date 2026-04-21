@@ -12,8 +12,6 @@ from reportlab.lib.units import cm
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 
 import g4f
-# Importamos proveedores específicos que NO bloquean a Render
-from g4f.Provider import DuckDuckGo, Blackbox
 
 app = Flask(__name__)
 
@@ -140,7 +138,7 @@ HTML_INTERFAZ = """
             <button type="submit" id="submitBtn">Generar Documento PDF</button>
             <div id="loading" class="loader">
                 <div class="spinner"></div>
-                <p><b>Investigando y redactando (Proceso Profundo)...</b><br>Esto tomará entre 30 y 60 segundos. Por favor, no cierres la página.</p>
+                <p><b>Investigando y redactando...</b><br>Esto tomará entre 30 y 60 segundos.</p>
             </div>
         </form>
     </div>
@@ -175,6 +173,7 @@ HTML_INTERFAZ = """
 """
 
 def limpiar_formato_ia(texto):
+    texto = re.sub(r'\', '', texto)
     texto = re.sub(r'(?m)^### (.*?)$', r'<br/><font size="12"><b>\1</b></font>', texto)
     texto = re.sub(r'(?m)^## (.*?)$', r'<br/><font size="14"><b>\1</b></font>', texto)
     texto = re.sub(r'(?m)^# (.*?)$', r'<br/><font size="16"><b>\1</b></font>', texto)
@@ -196,25 +195,31 @@ def generar_contenido_ia(tema, asignatura, instrucciones):
         f"4. Al final añade 'Bibliografía' con 3 fuentes reales en APA 7."
     )
     
-    # Lista de proveedores que NO bloquean servidores de la nube (Render)
-    proveedores_seguros = [DuckDuckGo, Blackbox]
+    # Intento 1: Modelo Principal Automático
+    try:
+        response = g4f.ChatCompletion.create(
+            model="gpt-4", 
+            messages=[{"role": "user", "content": prompt}],
+            timeout=120
+        )
+        if response and len(response) > 50:
+            return response
+    except Exception:
+        pass
 
-    for proveedor in proveedores_seguros:
-        try:
-            response = g4f.ChatCompletion.create(
-                model=g4f.models.gpt_4, 
-                messages=[{"role": "user", "content": prompt}],
-                provider=proveedor,
-                timeout=120
-            )
-            if response and len(response) > 50:
-                return response
-        except Exception as e:
-            print(f"Fallo con proveedor {proveedor}: {e}")
-            continue # Si uno falla, pasa inmediatamente al siguiente
+    # Intento 2: Modelo de Respaldo Rápido
+    try:
+        response_b = g4f.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            timeout=120
+        )
+        if response_b and len(response_b) > 50:
+            return response_b
+    except Exception:
+        pass
             
-    # Mensaje de error real (Solo si TODO falla)
-    return "Error de conexión con la IA. Los servidores detectaron mucho tráfico desde Render. Por favor, espera unos minutos y vuelve a intentarlo. (Código de error: PROVEEDORES_BLOQUEADOS)"
+    return "Error temporal. Los servidores de IA están saturados en este momento. Por favor, espera un minuto y dale al botón de generar nuevamente."
 
 def obtener_fecha_espanol():
     meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -234,15 +239,16 @@ def crear_pdf(datos, contenido_ia):
 
     elements = []
 
+    # --- NOMBRE DE UNIVERSIDAD EN UNA SOLA LÍNEA LIMPIA ---
     nombres_universidades = {
-        "ucateci.png": ["Universidad Católica del Cibao", "(UCATECI)"],
-        "pucmm.png": ["Pontificia Universidad Católica Madre y Maestra", "(PUCMM)"],
-        "uasd.png": ["Universidad Autónoma de Santo Domingo", "(UASD)"]
+        "ucateci.png": "Universidad Católica del Cibao (UCATECI)",
+        "pucmm.png": "Pontificia Universidad Católica Madre y Maestra (PUCMM)",
+        "uasd.png": "Universidad Autónoma de Santo Domingo (UASD)"
     }
-    nombres = nombres_universidades.get(datos['logo_filename'], ["Universidad", ""])
+    nombre_uni = nombres_universidades.get(datos.get('logo_filename', ''), "Universidad")
 
-    elements.append(Paragraph(f"<b>{nombres}</b>", st_cent))
-    elements.append(Paragraph(f"<b>{nombres}</b>", st_cent))
+    # PORTADA
+    elements.append(Paragraph(f"<b>{nombre_uni}</b>", st_cent))
     elements.append(Spacer(1, 0.2*cm))
 
     logo_path = os.path.join('static', 'logos', datos['logo_filename'])
@@ -279,6 +285,7 @@ def crear_pdf(datos, contenido_ia):
 
     elements.append(PageBreak())
 
+    # CUERPO DEL INFORME
     texto_formateado = limpiar_formato_ia(contenido_ia)
     elements.append(Paragraph(texto_formateado, st_body))
 

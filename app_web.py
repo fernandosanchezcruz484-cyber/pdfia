@@ -202,7 +202,7 @@ def generar_contenido_ia(tema, asignatura, instrucciones):
     )
     
     try:
-        # CORRECCIÓN AQUÍ: Agregado el para acceder al mensaje correctamente
+        # CORRECCIÓN AQUÍ: response.choices.message.content (el es la clave)
         response = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model="llama-3.1-8b-instant", 

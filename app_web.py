@@ -1,7 +1,6 @@
 import io
 import os
 import re
-import requests
 from datetime import datetime
 from flask import Flask, request, send_file, render_template_string
 
@@ -10,6 +9,12 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Page
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+
+# --- IMPORTAMOS LA IA OFICIAL DE GOOGLE ---
+import google.generativeai as genai
+
+# --- CONFIGURACIÓN DIRECTA DE TU API KEY ---
+genai.configure(api_key="AIzaSyDXjHSNVO-yhHAo6-KfYq5c6-2dFxu5Zc4")
 
 app = Flask(__name__)
 
@@ -83,7 +88,7 @@ HTML_INTERFAZ = """
     <div class="card">
         <header>
             <h1>Redactor Académico Pro</h1>
-            <p class="subtitle">Conexión Libre de Código Abierto</p>
+            <p class="subtitle">Desarrollado con Google Gemini AI</p>
         </header>
         
         <form id="pdfForm" action="/generar" method="POST">
@@ -136,7 +141,7 @@ HTML_INTERFAZ = """
             <button type="submit" id="submitBtn">Generar Documento PDF</button>
             <div id="loading" class="loader">
                 <div class="spinner"></div>
-                <p><b>La IA libre está redactando tu trabajo...</b><br>Esto tomará entre 30 y 60 segundos.</p>
+                <p><b>Gemini está redactando tu trabajo...</b><br>Esto tomará unos pocos segundos.</p>
             </div>
         </form>
     </div>
@@ -184,29 +189,26 @@ def generar_contenido_ia(tema, asignatura, instrucciones):
     prompt = (
         f"Eres un estudiante universitario realizando un trabajo final sobre: '{tema}'. "
         f"Asignatura: {asignatura}. "
-        f"Instrucciones a responder: {instrucciones if instrucciones else 'Desarrolla el tema de forma profunda y académica.'}. "
+        f"Instrucciones a responder: {instrucciones if instrucciones else 'Desarrolla el tema de forma profunda, formal y académica.'}. "
         f"REGLAS ESTRICTAS: "
         f"1. Redacta en PRIMERA PERSONA DEL PLURAL ('Investigamos', 'Concluimos'). "
         f"2. NADA de saludos, inicia directo con el texto. "
-        f"3. NO uses el símbolo ## para los títulos, simplemente usa **TÍTULO** en mayúsculas. "
-        f"4. Al final añade 'Bibliografía' con 3 fuentes reales en formato APA 7."
+        f"3. NO uses el símbolo ## ni asteriscos (**) para los títulos, simplemente escribe los títulos en MAYÚSCULAS. "
+        f"4. Al final añade 'Bibliografía' con 3 fuentes reales en formato APA 7. "
+        f"5. DEVUELVE ÚNICAMENTE EL TEXTO FINAL. NO uses formato JSON, NO expliques tu proceso."
     )
     
-    # --- CONEXIÓN DIRECTA A IA DE CÓDIGO ABIERTO (Sin Tarjetas, Sin Bloqueos) ---
     try:
-        url = "https://text.pollinations.ai/"
-        payload = {
-            "messages": [{"role": "user", "content": prompt}]
-        }
-        # Hacemos la petición con un límite de tiempo largo para que no se rinda
-        response = requests.post(url, json=payload, timeout=120)
+        # Usamos el modelo ultra rápido y estable de Google
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(prompt)
         
-        if response.status_code == 200 and len(response.text) > 50:
+        if response.text:
             return response.text
         else:
-            return "Error: La IA tardó demasiado en responder. Por favor, vuelve atrás y presiona Generar de nuevo."
+            return "Error: Gemini no devolvió texto."
     except Exception as e:
-        return f"Fallo de conexión con el servidor libre: {str(e)}"
+        return f"Error con la API de Gemini: {str(e)}"
 
 def obtener_fecha_espanol():
     meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -226,7 +228,6 @@ def crear_pdf(datos, contenido_ia):
 
     elements = []
 
-    # --- NOMBRE DE UNIVERSIDAD EN UNA SOLA LÍNEA LIMPIA ---
     nombres_universidades = {
         "ucateci.png": "Universidad Católica del Cibao (UCATECI)",
         "pucmm.png": "Pontificia Universidad Católica Madre y Maestra (PUCMM)",
@@ -234,7 +235,6 @@ def crear_pdf(datos, contenido_ia):
     }
     nombre_uni = nombres_universidades.get(datos.get('logo_filename', ''), "Universidad")
 
-    # PORTADA
     elements.append(Paragraph(f"<b>{nombre_uni}</b>", st_cent))
     elements.append(Spacer(1, 0.2*cm))
 
@@ -272,7 +272,6 @@ def crear_pdf(datos, contenido_ia):
 
     elements.append(PageBreak())
 
-    # CUERPO DEL INFORME
     texto_formateado = limpiar_formato_ia(contenido_ia)
     elements.append(Paragraph(texto_formateado, st_body))
 

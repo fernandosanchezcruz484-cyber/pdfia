@@ -1,6 +1,7 @@
 import io
 import os
 import re
+import requests
 from datetime import datetime
 from flask import Flask, request, send_file, render_template_string
 
@@ -9,8 +10,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Page
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
-
-from g4f.client import Client
 
 app = Flask(__name__)
 
@@ -84,7 +83,7 @@ HTML_INTERFAZ = """
     <div class="card">
         <header>
             <h1>Redactor Académico Pro</h1>
-            <p class="subtitle">Generador Inteligente con Formato APA 7</p>
+            <p class="subtitle">Conexión Libre de Código Abierto</p>
         </header>
         
         <form id="pdfForm" action="/generar" method="POST">
@@ -137,7 +136,7 @@ HTML_INTERFAZ = """
             <button type="submit" id="submitBtn">Generar Documento PDF</button>
             <div id="loading" class="loader">
                 <div class="spinner"></div>
-                <p><b>Investigando y redactando...</b><br>Esto puede tomar hasta un minuto.</p>
+                <p><b>La IA libre está redactando tu trabajo...</b><br>Esto tomará entre 30 y 60 segundos.</p>
             </div>
         </form>
     </div>
@@ -186,41 +185,28 @@ def generar_contenido_ia(tema, asignatura, instrucciones):
         f"Eres un estudiante universitario realizando un trabajo final sobre: '{tema}'. "
         f"Asignatura: {asignatura}. "
         f"Instrucciones a responder: {instrucciones if instrucciones else 'Desarrolla el tema de forma profunda y académica.'}. "
-        f"REGLAS: "
+        f"REGLAS ESTRICTAS: "
         f"1. Redacta en PRIMERA PERSONA DEL PLURAL ('Investigamos', 'Concluimos'). "
         f"2. NADA de saludos, inicia directo con el texto. "
         f"3. NO uses el símbolo ## para los títulos, simplemente usa **TÍTULO** en mayúsculas. "
-        f"4. Al final añade 'Bibliografía' con 3 fuentes reales en APA 7."
+        f"4. Al final añade 'Bibliografía' con 3 fuentes reales en formato APA 7."
     )
     
-    # NUEVO SISTEMA: G4F Client (Automático)
-    client = Client()
-    
+    # --- CONEXIÓN DIRECTA A IA DE CÓDIGO ABIERTO (Sin Tarjetas, Sin Bloqueos) ---
     try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        contenido = response.choices.message.content
-        if contenido and len(contenido) > 50:
-            return contenido
+        url = "https://text.pollinations.ai/"
+        payload = {
+            "messages": [{"role": "user", "content": prompt}]
+        }
+        # Hacemos la petición con un límite de tiempo largo para que no se rinda
+        response = requests.post(url, json=payload, timeout=120)
+        
+        if response.status_code == 200 and len(response.text) > 50:
+            return response.text
+        else:
+            return "Error: La IA tardó demasiado en responder. Por favor, vuelve atrás y presiona Generar de nuevo."
     except Exception as e:
-        print(f"Intento 1 falló: {e}")
-        pass
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        contenido = response.choices.message.content
-        if contenido and len(contenido) > 50:
-            return contenido
-    except Exception as e:
-        print(f"Intento 2 falló: {e}")
-        pass
-            
-    return "Error: Las IAs gratuitas han bloqueado la IP de este servidor en la nube permanentemente. Como desarrollador, el siguiente paso es conectar una API Key real (ej. Groq o Gemini) en lugar de usar G4F."
+        return f"Fallo de conexión con el servidor libre: {str(e)}"
 
 def obtener_fecha_espanol():
     meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]

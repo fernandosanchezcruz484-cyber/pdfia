@@ -13,10 +13,10 @@ from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 
 app = Flask(__name__)
 
-# --- CONFIGURACIÓN DIRECTA ---
+# --- LA LLAVE SIGUE SIENDO LA MISMA QUE TIENES EN RENDER ---
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-# --- DISEÑO WEB UCATECI ---
+# --- INTERFAZ LIMPIA ---
 HTML_INTERFAZ = """
 <!DOCTYPE html>
 <html lang="es">
@@ -28,18 +28,18 @@ HTML_INTERFAZ = """
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f1f5f9; display: flex; justify-content: center; padding: 20px; }
         .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 600px; }
-        h1 { color: #1e293b; text-align: center; font-size: 24px; }
+        h1 { color: #1e293b; text-align: center; font-size: 24px; margin-bottom: 5px; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         label { display: block; margin: 10px 0 5px; font-weight: 600; font-size: 12px; color: #475569; }
         input, textarea, select { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
         button { width: 100%; padding: 15px; background: #2563eb; color: white; border: none; border-radius: 10px; font-weight: 800; margin-top: 20px; cursor: pointer; }
-        #loading { display: none; text-align: center; color: #2563eb; font-weight: bold; margin-top: 10px; }
+        #loading { display: none; text-align: center; color: #2563eb; font-weight: bold; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="card">
         <h1>Generador de Trabajos UCATECI</h1>
-        <p style="text-align:center; font-size:12px; color:green;">VERSIÓN MANUAL (CONEXIÓN DIRECTA)</p>
+        <p style="text-align:center; font-size:11px; color:#16a34a; font-weight:bold;">MODO CONEXIÓN DIRECTA ACTIVADO</p>
         <form id="f" action="/generar" method="POST">
             <div class="grid">
                 <div style="grid-column: span 2;">
@@ -55,12 +55,12 @@ HTML_INTERFAZ = """
                     <input type="text" name="profesor" required>
                 </div>
                 <div style="grid-column: span 2;">
-                    <label>Estudiantes (Nombre y Matrícula):</label>
-                    <textarea name="estudiantes" required></textarea>
+                    <label>Integrantes (Nombre y Matrícula):</label>
+                    <textarea name="estudiantes" rows="3" required></textarea>
                 </div>
             </div>
-            <button type="submit" id="b">GENERAR PDF AHORA</button>
-            <div id="loading">Redactando con Llama 3.1... espera un momento.</div>
+            <button type="submit" id="b">GENERAR PDF</button>
+            <div id="loading">Redactando informe... por favor espera.</div>
         </form>
     </div>
     <script>
@@ -82,7 +82,7 @@ def llamar_ia_manual(tema, asignatura):
     payload = {
         "model": "llama-3.1-8b-instant",
         "messages": [
-            {"role": "user", "content": f"Redacta un informe académico formal sobre {tema} para la asignatura {asignatura}. Usa primera persona del plural. Al final pon Bibliografía APA 7."}
+            {"role": "user", "content": f"Redacta un informe académico formal sobre {tema} para la asignatura {asignatura}. Usa primera persona del plural. Incluye Bibliografía APA 7."}
         ],
         "temperature": 0.5
     }
@@ -90,10 +90,10 @@ def llamar_ia_manual(tema, asignatura):
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         datos = response.json()
-        # Aquí no hay error de lista, vamos directo al grano:
+        # Acceso directo al texto sin usar librerías raras:
         return datos['choices']['message']['content']
     except Exception as e:
-        return f"Error en conexión manual: {str(e)}"
+        return f"Error en la redacción: {str(e)}"
 
 def crear_pdf(datos, contenido_ia):
     buffer = io.BytesIO()
@@ -103,20 +103,20 @@ def crear_pdf(datos, contenido_ia):
     st_body = ParagraphStyle('B', parent=styles['Normal'], fontSize=11, leading=14, alignment=TA_JUSTIFY)
     
     elements = []
-    # Portada básica pero funcional
+    # Portada
     elements.append(Paragraph("<b>UNIVERSIDAD CATÓLICA DEL CIBAO (UCATECI)</b>", st_cent))
     elements.append(Spacer(1, 4*cm))
     elements.append(Paragraph(f"<b>TEMA: {datos['tema'].upper()}</b>", st_cent))
     elements.append(Spacer(1, 4*cm))
-    elements.append(Paragraph(f"<b>Estudiantes:</b><br/>{datos['estudiantes'].replace('\\n', '<br/>')}", st_cent))
+    elements.append(Paragraph(f"<b>Presentado por:</b><br/>{datos['estudiantes'].replace('\\n', '<br/>')}", st_cent))
     elements.append(Spacer(1, 1*cm))
     elements.append(Paragraph(f"<b>Docente:</b> {datos['profesor']}", st_cent))
     elements.append(PageBreak())
     
-    # Contenido
-    c_limpio = contenido_ia.replace('\n', '<br/>')
-    c_limpio = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', c_limpio)
-    elements.append(Paragraph(c_limpio, st_body))
+    # Contenido redactado por la IA
+    texto_formateado = contenido_ia.replace('\n', '<br/>')
+    texto_formateado = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', texto_formateado)
+    elements.append(Paragraph(texto_formateado, st_body))
     
     doc.build(elements)
     buffer.seek(0)
@@ -131,7 +131,7 @@ def generar():
         d = request.form.to_dict()
         texto = llamar_ia_manual(d['tema'], d['asignatura'])
         pdf = crear_pdf(d, texto)
-        return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name="Trabajo.pdf")
+        return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name="Informe_Final.pdf")
     except Exception as e:
         return f"Error crítico: {str(e)}", 500
 

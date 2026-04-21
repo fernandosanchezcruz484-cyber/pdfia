@@ -173,25 +173,17 @@ HTML_INTERFAZ = """
 
 # --- PARSER DE MARKDOWN A REPORTLAB ---
 def limpiar_formato_ia(texto):
-    # 1. Quitar referencias
     texto = re.sub(r'\', '', texto)
-    
-    # 2. Convertir títulos (## o ###) a etiquetas visuales grandes y en negrita
     texto = re.sub(r'(?m)^### (.*?)$', r'<br/><font size="12"><b>\1</b></font>', texto)
     texto = re.sub(r'(?m)^## (.*?)$', r'<br/><font size="14"><b>\1</b></font>', texto)
     texto = re.sub(r'(?m)^# (.*?)$', r'<br/><font size="16"><b>\1</b></font>', texto)
-    
-    # 3. Convertir **negritas** a <b>negritas</b>
     texto = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', texto)
-    
-    # 4. Convertir listas de guiones (- o *) a viñetas reales (•)
     texto = re.sub(r'(?m)^[-*]\s+(.*?)$', r'• \1', texto)
-    
-    # 5. Convertir saltos de línea normales a HTML
     texto = texto.replace('\n', '<br/>')
-    
-    # 6. Eliminar excesos de saltos de línea (para que no queden huecos feos)
     texto = texto.replace('<br/><br/><br/>', '<br/><br/>')
+    
+    # CORRECCIÓN PARA RENDER (Sintaxis arreglada)
+    texto = re.sub(r'\\', '', texto)
     
     return texto
 
@@ -230,9 +222,19 @@ def crear_pdf(datos, contenido_ia):
 
     elements = []
 
-    # --- PORTADA ACADÉMICA (ESPACIOS REDUCIDOS PARA CABER EN 1 PÁGINA) ---
-    elements.append(Paragraph("<b>Universidad Católica del Cibao</b>", st_cent))
-    elements.append(Paragraph("<b>(UCATECI)</b>", st_cent))
+    # --- DICCIONARIO DE NOMBRES DE UNIVERSIDADES ---
+    nombres_universidades = {
+        "ucateci.png": ["Universidad Católica del Cibao", "(UCATECI)"],
+        "pucmm.png": ["Pontificia Universidad Católica Madre y Maestra", "(PUCMM)"],
+        "uasd.png": ["Universidad Autónoma de Santo Domingo", "(UASD)"]
+    }
+
+    # Selecciona el nombre correcto según el logo elegido
+    nombres = nombres_universidades.get(datos['logo_filename'], ["Universidad", ""])
+
+    # --- PORTADA ACADÉMICA DINÁMICA ---
+    elements.append(Paragraph(f"<b>{nombres}</b>", st_cent))
+    elements.append(Paragraph(f"<b>{nombres}</b>", st_cent))
     elements.append(Spacer(1, 0.2*cm))
 
     logo_path = os.path.join('static', 'logos', datos['logo_filename'])
@@ -259,13 +261,13 @@ def crear_pdf(datos, contenido_ia):
             elements.append(Paragraph(est.strip(), st_cent))
     
     elements.append(Spacer(1, 1.2*cm))
-    elements.append(Paragraph("<b>Docente</b>", st_bold))  # Neutro como pediste
+    elements.append(Paragraph("<b>Docente</b>", st_bold))  
     elements.append(Paragraph(datos['profesor'], st_cent))
     
     elements.append(Spacer(1, 0.8*cm))
     elements.append(Paragraph("La Vega, República Dominicana", st_cent))
     elements.append(Paragraph(f"<b>Fecha</b>", st_bold))
-    elements.append(Paragraph(obtener_fecha_espanol(), st_cent)) # Español forzado
+    elements.append(Paragraph(obtener_fecha_espanol(), st_cent)) 
 
     elements.append(PageBreak())
 

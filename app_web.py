@@ -88,7 +88,7 @@ HTML_INTERFAZ = """
     <div class="card">
         <header>
             <h1>Redactor Académico Pro</h1>
-            <p class="subtitle">Motor: Groq (Llama 3 Ultra-Rápido)</p>
+            <p class="subtitle">Motor: Groq (Llama 3.1 Ultra-Rápido)</p>
         </header>
         
         <form id="pdfForm" action="/generar" method="POST">
@@ -202,9 +202,10 @@ def generar_contenido_ia(tema, asignatura, instrucciones):
     )
     
     try:
+        # EL CAMBIO ESTÁ AQUÍ: Usamos el modelo actual y activo "llama-3.1-8b-instant"
         response = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama3-8b-8192", 
+            model="llama-3.1-8b-instant", 
             temperature=0.5
         )
         return response.choices.message.content

@@ -12,9 +12,9 @@ from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 
 from groq import Groq
 
-# --- EL CÓDIGO BUSCA LA LLAVE EN LA CAJA FUERTE DE RENDER ---
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+# --- PON TU NUEVA LLAVE DE GROQ AQUÍ ---
+GROQ_API_KEY = "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"
+client = Groq(api_key=GROQ_API_KEY)
 
 app = Flask(__name__)
 
@@ -186,9 +186,6 @@ def limpiar_formato_ia(texto):
     return texto
 
 def generar_contenido_ia(tema, asignatura, instrucciones):
-    if not client:
-        return "Error Crítico: No configuraste la GROQ_API_KEY en Render."
-
     prompt = (
         f"Eres un estudiante universitario realizando un trabajo final sobre: '{tema}'. "
         f"Asignatura: {asignatura}. "
@@ -202,6 +199,7 @@ def generar_contenido_ia(tema, asignatura, instrucciones):
     )
     
     try:
+        # Usamos Llama 3 a través de Groq (Extremadamente rápido)
         response = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model="llama3-8b-8192", 

@@ -181,10 +181,6 @@ def limpiar_formato_ia(texto):
     texto = re.sub(r'(?m)^[-*]\s+(.*?)$', r'• \1', texto)
     texto = texto.replace('\n', '<br/>')
     texto = texto.replace('<br/><br/><br/>', '<br/><br/>')
-    
-    # CORRECCIÓN PARA RENDER (Sintaxis blindada, reemplaza barras invertidas sin usar regex que pueda fallar)
-    texto = texto.replace('\\', '')
-    
     return texto
 
 def generar_contenido_ia(tema, asignatura, instrucciones):
@@ -229,7 +225,6 @@ def crear_pdf(datos, contenido_ia):
         "uasd.png": ["Universidad Autónoma de Santo Domingo", "(UASD)"]
     }
 
-    # Selecciona el nombre correcto según el logo elegido
     nombres = nombres_universidades.get(datos['logo_filename'], ["Universidad", ""])
 
     # --- PORTADA ACADÉMICA DINÁMICA ---

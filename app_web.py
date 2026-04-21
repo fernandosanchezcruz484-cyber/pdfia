@@ -1,6 +1,7 @@
 import io
 import os
 import re
+import time
 from datetime import datetime
 from flask import Flask, request, send_file, render_template_string
 
@@ -173,7 +174,6 @@ HTML_INTERFAZ = """
 
 # --- PARSER DE MARKDOWN A REPORTLAB ---
 def limpiar_formato_ia(texto):
-    # Filtro estricto para eliminar cualquier rastro de código Markdown y dejar texto puro
     texto = re.sub(r'(?m)^### (.*?)$', r'<br/><font size="12"><b>\1</b></font>', texto)
     texto = re.sub(r'(?m)^## (.*?)$', r'<br/><font size="14"><b>\1</b></font>', texto)
     texto = re.sub(r'(?m)^# (.*?)$', r'<br/><font size="16"><b>\1</b></font>', texto)
@@ -194,11 +194,22 @@ def generar_contenido_ia(tema, asignatura, instrucciones):
         f"3. NO uses el símbolo ## para los títulos, simplemente usa **TÍTULO** en mayúsculas. "
         f"4. Al final añade 'Bibliografía' con 3-5 fuentes reales en APA 7."
     )
-    try:
-        response = g4f.ChatCompletion.create(model=g4f.models.gpt_4, messages=[{"role": "user", "content": prompt}])
-        return response if response else "Error en la generación."
-    except Exception:
-        return "Fallo en la conexión. Reintente."
+    
+    # SISTEMA DE REINTENTOS PARA EVITAR EL "FALLO DE CONEXIÓN"
+    for intento in range(3):
+        try:
+            response = g4f.ChatCompletion.create(
+                model="gpt-3.5-turbo", # Más rápido y estable
+                messages=[{"role": "user", "content": prompt}],
+                timeout=60
+            )
+            if response and len(response) > 50: # Validamos que la respuesta no esté vacía
+                return response
+        except Exception:
+            time.sleep(2) # Si falla, espera 2 segundos y vuelve a intentar
+            continue
+            
+    return "⚠️ Los servidores gratuitos de IA están saturados. Por favor, vuelve a la página anterior y dale al botón de generar nuevamente."
 
 def obtener_fecha_espanol():
     meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -218,46 +229,52 @@ def crear_pdf(datos, contenido_ia):
 
     elements = []
 
-    # --- DICCIONARIO INTELIGENTE DE UNIVERSIDADES ---
-    nombres_universidades = {
-        "ucateci.png": ["Universidad Católica del Cibao", "(UCATECI)"],
-        "pucmm.png": ["Pontificia Universidad Católica Madre y Maestra", "(PUCMM)"],
-        "uasd.png": ["Universidad Autónoma de Santo Domingo", "(UASD)"]
-    }
+    # --- CORRECCIÓN DEFINITIVA DE LOS NOMBRES DE LA PORTADA ---
+    logo_file = datos.get('logo_filename', '')
+    if logo_file == 'ucateci.png':
+        uni_name = "Universidad Católica del Cibao"
+        uni_siglas = "(UCATECI)"
+    elif logo_file == 'pucmm.png':
+        uni_name = "Pontificia Universidad Católica Madre y Maestra"
+        uni_siglas = "(PUCMM)"
+    elif logo_file == 'uasd.png':
+        uni_name = "Universidad Autónoma de Santo Domingo"
+        uni_siglas = "(UASD)"
+    else:
+        uni_name = "Universidad"
+        uni_siglas = ""
 
-    nombres = nombres_universidades.get(datos['logo_filename'], ["Universidad", ""])
-
-    # --- PORTADA ACADÉMICA DINÁMICA ---
-    elements.append(Paragraph(f"<b>{nombres}</b>", st_cent))
-    elements.append(Paragraph(f"<b>{nombres}</b>", st_cent))
+    elements.append(Paragraph(f"<b>{uni_name}</b>", st_cent))
+    if uni_siglas:
+        elements.append(Paragraph(f"<b>{uni_siglas}</b>", st_cent))
     elements.append(Spacer(1, 0.2*cm))
 
-    logo_path = os.path.join('static', 'logos', datos['logo_filename'])
+    logo_path = os.path.join('static', 'logos', logo_file)
     if os.path.exists(logo_path):
         elements.append(Image(logo_path, width=3.5*cm, height=3.5*cm))
     
     elements.append(Spacer(1, 0.5*cm))
-    elements.append(Paragraph(f"<b>{datos['facultad']}</b>", st_bold))
-    elements.append(Paragraph(f"<b>{datos['escuela']}</b>", st_bold))
+    elements.append(Paragraph(f"<b>{datos.get('facultad', '')}</b>", st_bold))
+    elements.append(Paragraph(f"<b>{datos.get('escuela', '')}</b>", st_bold))
     
     elements.append(Spacer(1, 1.5*cm))
     elements.append(Paragraph("<b>Tema</b>", st_bold))
     elements.append(Spacer(1, 0.2*cm))
-    elements.append(Paragraph(datos['tema'], st_tema))
+    elements.append(Paragraph(datos.get('tema', ''), st_tema))
     
     elements.append(Spacer(1, 1.2*cm))
     elements.append(Paragraph("<b>Trabajo Final de la asignatura</b>", st_bold))
-    elements.append(Paragraph(datos['asignatura'], st_cent))
+    elements.append(Paragraph(datos.get('asignatura', ''), st_cent))
     
     elements.append(Spacer(1, 1.2*cm))
     elements.append(Paragraph("<b>Presentado por:</b>", st_bold))
-    for est in datos['estudiantes'].split('\n'):
+    for est in datos.get('estudiantes', '').split('\n'):
         if est.strip():
             elements.append(Paragraph(est.strip(), st_cent))
     
     elements.append(Spacer(1, 1.2*cm))
     elements.append(Paragraph("<b>Docente</b>", st_bold))  
-    elements.append(Paragraph(datos['profesor'], st_cent))
+    elements.append(Paragraph(datos.get('profesor', ''), st_cent))
     
     elements.append(Spacer(1, 0.8*cm))
     elements.append(Paragraph("La Vega, República Dominicana", st_cent))
@@ -282,7 +299,7 @@ def index():
 def generar():
     try:
         datos = request.form.to_dict()
-        contenido = generar_contenido_ia(datos['tema'], datos['asignatura'], datos.get('instrucciones', ''))
+        contenido = generar_contenido_ia(datos.get('tema', ''), datos.get('asignatura', ''), datos.get('instrucciones', ''))
         pdf = crear_pdf(datos, contenido)
         return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name="Trabajo_Final.pdf")
     except Exception as e:

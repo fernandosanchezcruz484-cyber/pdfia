@@ -1,11 +1,12 @@
 import io
 import os
 import re
+import traceback
 from datetime import datetime
 from flask import Flask, request, send_file, render_template_string
 
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.lib import colors
@@ -15,154 +16,155 @@ import g4f
 
 app = Flask(__name__)
 
-# --- INTERFAZ MEJORADA CON MENÚS DINÁMICOS ---
+# --- INTERFAZ PREMIUM DINÁMICA ---
 HTML_INTERFAZ = """
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Asesor Académico UCATECI Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asesor Académico Pro | Fernando Sánchez</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         
         :root {
-            --primary: #1e3a8a; /* Azul UCATECI */
-            --accent: #d97706; /* Dorado UCATECI */
-            --bg: #f8fafc;
+            --primary: #1e3a8a;
+            --accent: #b45309;
+            --bg: #f1f5f9;
         }
 
         body { 
             font-family: 'Plus Jakarta Sans', sans-serif; 
             background: var(--bg); 
             display: flex; justify-content: center; padding: 40px 20px; 
-            color: #1e293b;
+            color: #0f172a;
         }
 
         .card { 
-            background: white; padding: 40px; border-radius: 24px; 
-            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
-            width: 100%; max-width: 650px; border: 1px solid #e2e8f0;
+            background: white; padding: 45px; border-radius: 30px; 
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.1);
+            width: 100%; max-width: 680px; border: 1px solid #e2e8f0;
         }
 
-        h1 { text-align: center; font-size: 30px; font-weight: 800; margin-bottom: 8px; color: var(--primary); }
-        .subtitle { text-align: center; color: #64748b; margin-bottom: 30px; font-size: 15px; }
+        header { text-align: center; margin-bottom: 35px; }
+        h1 { font-size: 32px; font-weight: 800; color: var(--primary); margin-bottom: 5px; letter-spacing: -1px; }
+        .badge { background: #dbeafe; color: var(--primary); padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
 
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: 700; font-size: 14px; color: #475569; }
+        .full { grid-column: span 2; }
+
+        label { display: block; margin-bottom: 8px; font-weight: 700; font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
         
         input, textarea, select { 
-            width: 100%; padding: 12px 16px; border: 2px solid #f1f5f9; 
-            border-radius: 12px; font-size: 15px; transition: all 0.3s;
+            width: 100%; padding: 14px; border: 2px solid #f1f5f9; 
+            border-radius: 14px; font-size: 15px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             background: #f8fafc; font-family: inherit;
         }
 
         input:focus, select:focus, textarea:focus { 
             outline: none; border-color: var(--primary); background: white;
-            box-shadow: 0 0 0 4px rgba(30, 58, 138, 0.1);
+            box-shadow: 0 0 0 4px rgba(30, 58, 138, 0.08);
         }
 
         button { 
-            width: 100%; padding: 18px; background: var(--primary); color: white; 
-            border: none; border-radius: 16px; font-weight: 700; font-size: 16px;
-            cursor: pointer; transition: all 0.3s; margin-top: 10px;
-            box-shadow: 0 10px 15px -3px rgba(30, 58, 138, 0.3);
+            width: 100%; padding: 20px; background: var(--primary); color: white; 
+            border: none; border-radius: 18px; font-weight: 800; font-size: 16px;
+            cursor: pointer; transition: 0.3s; margin-top: 15px;
+            box-shadow: 0 10px 20px -5px rgba(30, 58, 138, 0.3);
         }
 
-        button:hover { background: #172554; transform: translateY(-2px); }
-        button:active { transform: translateY(0); }
-
-        .loader { display: none; text-align: center; color: var(--primary); margin-top: 20px; font-weight: 600; }
+        button:hover { background: #172554; transform: translateY(-3px); box-shadow: 0 20px 25px -5px rgba(30, 58, 138, 0.4); }
         
-        textarea { height: 100px; resize: none; }
+        .loader { display: none; text-align: center; color: var(--primary); margin-top: 25px; }
+        .spinner { width: 30px; height: 30px; border: 4px solid #e2e8f0; border-top: 4px solid var(--primary); border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        textarea { height: 110px; resize: none; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h1>Redactor Académico</h1>
-        <p class="subtitle">Generador de Informes Técnicos - UCATECI</p>
+        <header>
+            <span class="badge">V3.0 Ultra Final</span>
+            <h1>Redactor Académico</h1>
+            <p style="color: #64748b;">Especializado en Ingenierías y Ciencias Sociales</p>
+        </header>
         
         <form id="pdfForm" action="/generar" method="POST">
-            <div class="form-group">
-                <label>Universidad (Logo):</label>
-                <select name="logo_filename">
-                    <option value="ucateci.png">UCATECI (La Vega)</option>
-                    <option value="uasd.png">UASD</option>
-                    <option value="pucmm.png">PUCMM</option>
-                </select>
+            <div class="grid">
+                <div class="form-group">
+                    <label>Logo Universidad:</label>
+                    <select name="logo_filename">
+                        <option value="ucateci.png">UCATECI (La Vega)</option>
+                        <option value="pucmm.png">PUCMM</option>
+                        <option value="uasd.png">UASD</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Facultad:</label>
+                    <select name="facultad" id="facultad" onchange="actualizarEscuelas()" required>
+                        <option value="">-- Seleccione --</option>
+                        <option value="Facultad de las Ingenierías">Ingenierías</option>
+                        <option value="Facultad de Ciencias de la Salud">Salud</option>
+                        <option value="Facultad de Ciencias Sociales">Ciencias Sociales</option>
+                    </select>
+                </div>
+                <div class="form-group full">
+                    <label>Escuela:</label>
+                    <select name="escuela" id="escuela" required>
+                        <option value="">Primero elija una facultad</option>
+                    </select>
+                </div>
+                <div class="form-group full">
+                    <label>Tema del Informe:</label>
+                    <input type="text" name="tema" placeholder="Ej. Implementación de Lean Manufacturing" required>
+                </div>
+                <div class="form-group">
+                    <label>Asignatura:</label>
+                    <input type="text" name="asignatura" placeholder="Ej. Metodología II" required>
+                </div>
+                <div class="form-group">
+                    <label>Profesor(a):</label>
+                    <input type="text" name="profesor" placeholder="Hipólita Cepeda (MES)" required>
+                </div>
+                <div class="form-group full">
+                    <label>Presentado por (Nombres y Matrículas):</label>
+                    <textarea name="estudiantes" placeholder="Fernando Sánchez, 2024-0777&#10;Juan Pérez, 2024-0123" required></textarea>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label>Facultad:</label>
-                <select name="facultad" id="facultad" onchange="actualizarEscuelas()">
-                    <option value="">Seleccione una facultad</option>
-                    <option value="Facultad de las Ingenierías">Facultad de las Ingenierías</option>
-                    <option value="Facultad de Ciencias de la Salud">Facultad de Ciencias de la Salud</option>
-                    <option value="Facultad de Humanidades">Facultad de Humanidades</option>
-                    <option value="Facultad de Ciencias Sociales y Administrativas">Facultad de Ciencias Sociales</option>
-                </select>
+            <button type="submit" id="submitBtn">Generar Trabajo Final (1ra Persona)</button>
+            <div id="loading" class="loader">
+                <div class="spinner"></div>
+                <p style="margin-top: 10px;"><b>Redactando informe profesional...</b><br>Esto tomará unos 40 segundos.</p>
             </div>
-
-            <div class="form-group">
-                <label>Escuela:</label>
-                <select name="escuela" id="escuela">
-                    <option value="">Primero elija una facultad</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>Tema del Informe:</label>
-                <input type="text" name="tema" placeholder="Ej. Optimización de procesos industriales" required>
-            </div>
-
-            <div class="form-group">
-                <label>Asignatura:</label>
-                <input type="text" name="asignatura" placeholder="Ej. Tecnología Mecánica" required>
-            </div>
-
-            <div class="form-group">
-                <label>Presentado por (Nombre y Matrícula):</label>
-                <textarea name="estudiantes" placeholder="Fernando Sánchez, 2024-0777" required></textarea>
-            </div>
-
-            <div class="form-group">
-                <label>Profesor(a):</label>
-                <input type="text" name="profesor" placeholder="Ej. Hipólita Cepeda (MES)" required>
-            </div>
-
-            <button type="submit" id="submitBtn">Generar Trabajo Final</button>
-            <div id="loading" class="loader">⚙️ Redactando en primera persona...</div>
         </form>
     </div>
 
     <script>
-        const escuelasPorFacultad = {
+        const escuelas = {
             "Facultad de las Ingenierías": ["Escuela de Ingeniería Industrial", "Escuela de Ingeniería de Sistemas", "Escuela de Ingeniería Civil", "Escuela de Arquitectura"],
-            "Facultad de Ciencias de la Salud": ["Escuela de Medicina", "Escuela de Enfermería", "Escuela de Bioanálisis", "Escuela de Odontología"],
-            "Facultad de Humanidades": ["Escuela de Psicología", "Escuela de Educación", "Escuela de Comunicación"],
-            "Facultad de Ciencias Sociales y Administrativas": ["Escuela de Administración", "Escuela de Contabilidad", "Escuela de Derecho", "Escuela de Mercadeo"]
+            "Facultad de Ciencias de la Salud": ["Escuela de Medicina", "Escuela de Enfermería", "Escuela de Bioanálisis"],
+            "Facultad de Ciencias Sociales": ["Escuela de Administración", "Escuela de Contabilidad", "Escuela de Derecho", "Escuela de Psicología"]
         };
 
         function actualizarEscuelas() {
-            const facultadSel = document.getElementById("facultad").value;
-            const escuelaSelect = document.getElementById("escuela");
-            escuelaSelect.innerHTML = "";
-
-            if (facultadSel && escuelasPorFacultad[facultadSel]) {
-                escuelasPorFacultad[facultadSel].forEach(esc => {
-                    let option = document.createElement("option");
-                    option.value = esc;
-                    option.text = esc;
-                    escuelaSelect.add(option);
+            const fac = document.getElementById("facultad").value;
+            const esc = document.getElementById("escuela");
+            esc.innerHTML = "";
+            if (fac) {
+                escuelas[fac].forEach(e => {
+                    let op = document.createElement("option");
+                    op.value = e; op.text = e; esc.add(op);
                 });
             } else {
-                let option = document.createElement("option");
-                option.text = "Primero elija una facultad";
-                escuelaSelect.add(option);
+                esc.add(new Option("Elija primero la facultad", ""));
             }
         }
 
-        document.getElementById('pdfForm').onsubmit = function() {
-            document.getElementById('submitBtn').disabled = true;
+        document.getElementById('pdfForm').onsubmit = () => {
+            document.getElementById('submitBtn').style.display = 'none';
             document.getElementById('loading').style.display = 'block';
         };
     </script>
@@ -171,75 +173,76 @@ HTML_INTERFAZ = """
 """
 
 def generar_contenido_ia(tema, asignatura):
-    # Prompt ajustado a PRIMERA PERSONA (yo o nosotros)
     prompt = (
-        f"Actúa como un estudiante de ingeniería experto de UCATECI. Redacta un informe técnico sobre: {tema}. "
+        f"Eres un estudiante destacado de la Universidad UCATECI. Redacta un informe de investigación sobre: {tema}. "
         f"Asignatura: {asignatura}. "
-        f"REGLAS CRÍTICAS: "
-        f"1. Redacta estrictamente en PRIMERA PERSONA (yo o nosotros). Ej: 'Realizamos un análisis', 'Pude observar', 'Concluyo que'. "
-        f"2. Estructura: Introducción, Desarrollo profundo, Conclusiones. "
-        f"3. NADA de saludos de IA. "
-        f"4. Al final añade una 'Bibliografía' con 3 fuentes reales en APA 7."
+        f"INSTRUCCIONES: 1. Redacta en PRIMERA PERSONA DEL PLURAL (Nosotros). "
+        f"2. Usa un tono académico, denso y profesional. 3. Sin preámbulos. "
+        f"4. Estructura: Introducción, Desarrollo por puntos y Conclusión. "
+        f"5. Al final incluye Bibliografía con 3 fuentes reales en APA 7."
     )
     try:
         response = g4f.ChatCompletion.create(model=g4f.models.gpt_4, messages=[{"role": "user", "content": prompt}])
-        return response
-    except:
-        return "Error al generar contenido. Por favor reintenta."
+        return response if response else "Error: La IA no devolvió contenido."
+    except Exception:
+        return "Fallo en la conexión con la IA. Por favor, intente de nuevo."
 
 def crear_pdf(datos, contenido_ia):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2.5*cm, leftMargin=2.5*cm, topMargin=2.5*cm, bottomMargin=2.5*cm)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                            rightMargin=2.54*cm, leftMargin=2.54*cm, 
+                            topMargin=2.5*cm, bottomMargin=2.5*cm)
     
     styles = getSampleStyleSheet()
-    style_portada = ParagraphStyle('Portada', parent=styles['Normal'], fontSize=12, alignment=TA_CENTER, leading=18)
-    style_tema = ParagraphStyle('Tema', parent=style_portada, fontSize=14, fontName='Helvetica-Bold', leading=20)
-    style_body = ParagraphStyle('Body', parent=styles['Normal'], fontSize=11, alignment=TA_JUSTIFY, leading=16)
+    st_centrado = ParagraphStyle('Cent', parent=styles['Normal'], fontSize=12, alignment=TA_CENTER, leading=18)
+    st_bold_cent = ParagraphStyle('BoldCent', parent=st_centrado, fontName='Helvetica-Bold', fontSize=13)
+    st_tema = ParagraphStyle('Tema', parent=st_centrado, fontSize=15, fontName='Helvetica-Bold', leading=22)
+    st_body = ParagraphStyle('Body', parent=styles['Normal'], fontSize=11, leading=17, alignment=TA_JUSTIFY)
 
     elements = []
 
-    # --- PORTADA UCATECI ESTILO FERNANDO ---
-    elements.append(Paragraph("<b>Universidad Católica del Cibao</b>", style_portada))
-    elements.append(Paragraph("<b>(UCATECI)</b>", style_portada))
-    elements.append(Spacer(1, 0.5*cm))
+    # --- PORTADA ACADÉMICA ---
+    elements.append(Paragraph("<b>Universidad Católica del Cibao</b>", st_centrado))
+    elements.append(Paragraph("<b>(UCATECI)</b>", st_centrado))
+    elements.append(Spacer(1, 0.4*cm))
 
     logo_path = os.path.join('static', 'logos', datos['logo_filename'])
     if os.path.exists(logo_path):
-        img = Image(logo_path, width=4.5*cm, height=4.5*cm)
-        elements.append(img)
+        elements.append(Image(logo_path, width=4.2*cm, height=4.2*cm))
     
-    elements.append(Spacer(1, 1*cm))
-    elements.append(Paragraph(f"<b>{datos['facultad']}</b>", style_portada))
-    elements.append(Paragraph(f"<b>{datos['escuela']}</b>", style_portada))
+    elements.append(Spacer(1, 0.8*cm))
+    elements.append(Paragraph(f"<b>{datos['facultad'].upper()}</b>", st_bold_cent))
+    elements.append(Paragraph(f"<b>{datos['escuela'].upper()}</b>", st_bold_cent))
     
-    elements.append(Spacer(1, 2.5*cm))
-    elements.append(Paragraph("<b>Tema</b>", style_tema))
-    elements.append(Spacer(1, 0.5*cm))
-    elements.append(Paragraph(datos['tema'], style_portada))
+    elements.append(Spacer(1, 3.2*cm))
+    elements.append(Paragraph("<b>Tema</b>", st_bold_cent))
+    elements.append(Spacer(1, 0.3*cm))
+    elements.append(Paragraph(datos['tema'], st_tema))
     
-    elements.append(Spacer(1, 1.5*cm))
-    elements.append(Paragraph("<b>Trabajo Final de la asignatura</b>", style_tema))
-    elements.append(Paragraph(datos['asignatura'], style_portada))
+    elements.append(Spacer(1, 2.2*cm))
+    elements.append(Paragraph("<b>Trabajo Final de la asignatura</b>", st_bold_cent))
+    elements.append(Paragraph(datos['asignatura'], st_centrado))
     
-    elements.append(Spacer(1, 1.5*cm))
-    elements.append(Paragraph("<b>Presentado por:</b>", style_tema))
+    elements.append(Spacer(1, 2*cm))
+    elements.append(Paragraph("<b>Presentado por:</b>", st_bold_cent))
     for est in datos['estudiantes'].split('\n'):
-        elements.append(Paragraph(est.strip(), style_portada))
+        elements.append(Paragraph(est.strip(), st_centrado))
     
-    elements.append(Spacer(1, 1.5*cm))
-    elements.append(Paragraph("<b>Profesora</b>", style_tema))
-    elements.append(Paragraph(datos['profesor'], style_portada))
+    elements.append(Spacer(1, 1.8*cm))
+    elements.append(Paragraph("<b>Docente</b>", st_bold_cent))
+    elements.append(Paragraph(datos['profesor'], st_centrado))
     
-    elements.append(Spacer(1, 1*cm))
-    elements.append(Paragraph("La Vega, República Dominicana", style_portada))
-    elements.append(Paragraph("<b>Fecha</b>", style_tema))
-    elements.append(Paragraph(datetime.now().strftime("%B del %Y"), style_portada))
+    elements.append(Spacer(1, 1.2*cm))
+    elements.append(Paragraph(f"La Vega, R.D. / {datetime.now().strftime('%B %Y')}", st_centrado))
 
-    elements.append(PageBreak()) 
+    elements.append(PageBreak())
 
     # --- CUERPO DEL INFORME ---
-    clean_text = contenido_ia.replace("**", "<b>").replace("\n", "<br/>")
-    elements.append(Paragraph(clean_text, style_body))
+    txt_procesado = contenido_ia.replace("**", "<b>").replace("\n", "<br/>")
+    # Limpiador de códigos de cita si llegaran a aparecer
+    txt_procesado = re.sub(r'\', '', txt_procesado)
+    
+    elements.append(Paragraph(txt_procesado, st_body))
 
     doc.build(elements)
     buffer.seek(0)
@@ -251,10 +254,14 @@ def index():
 
 @app.route('/generar', methods=['POST'])
 def generar():
-    datos = request.form.to_dict()
-    contenido = generar_contenido_ia(datos['tema'], datos['asignatura'])
-    pdf_buffer = crear_pdf(datos, contenido)
-    return send_file(pdf_buffer, mimetype='application/pdf', as_attachment=True, download_name="Informe_Final_UCATECI.pdf")
+    try:
+        datos = request.form.to_dict()
+        contenido = generar_contenido_ia(datos['tema'], datos['asignatura'])
+        pdf = crear_pdf(datos, contenido)
+        return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name=f"Informe_{datetime.now().strftime('%Y%m%d')}.pdf")
+    except Exception as e:
+        return f"Error crítico: {str(e)}", 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)

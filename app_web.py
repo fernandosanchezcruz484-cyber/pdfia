@@ -1,6 +1,7 @@
 import io
 import os
 import re
+import json
 from datetime import datetime
 from flask import Flask, request, send_file, render_template_string
 
@@ -25,7 +26,7 @@ HTML_INTERFAZ = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generador Académico V2.0 | Fernando Sánchez</title>
+    <title>Generador Académico V3.0 | Fernando Sánchez</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         :root { --primary: #0f172a; --accent: #3b82f6; --bg: #e2e8f0; }
@@ -33,15 +34,13 @@ HTML_INTERFAZ = """
         .card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 40px; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15); width: 100%; max-width: 700px; border: 1px solid rgba(255,255,255,0.5); }
         header { text-align: center; margin-bottom: 30px; }
         h1 { font-size: 30px; font-weight: 800; color: var(--primary); margin-bottom: 5px; }
-        .badge { background: #dcfce7; color: #166534; padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 700; margin-bottom: 10px; display: inline-block; }
+        .badge { background: #fee2e2; color: #991b1b; padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 700; margin-bottom: 10px; display: inline-block; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .form-group { margin-bottom: 15px; }
         .full { grid-column: span 2; }
         label { display: block; margin-bottom: 6px; font-weight: 700; font-size: 13px; color: #334155; text-transform: uppercase; }
         input, textarea, select { width: 100%; padding: 12px 15px; border: 2px solid #cbd5e1; border-radius: 12px; font-size: 14px; transition: all 0.3s ease; background: #f8fafc; font-family: inherit; box-sizing: border-box; }
-        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); background: white; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15); }
         button { width: 100%; padding: 18px; background: var(--primary); color: white; border: none; border-radius: 14px; font-weight: 800; font-size: 16px; cursor: pointer; transition: 0.3s; margin-top: 10px; }
-        button:hover { background: var(--accent); transform: translateY(-2px); box-shadow: 0 10px 20px -5px rgba(59, 130, 246, 0.4); }
         .loader { display: none; text-align: center; color: var(--accent); margin-top: 20px; }
         .spinner { width: 30px; height: 30px; border: 4px solid #e2e8f0; border-top: 4px solid var(--accent); border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -50,9 +49,9 @@ HTML_INTERFAZ = """
 <body>
     <div class="card">
         <header>
-            <span class="badge">SISTEMA VERSIÓN 2.0 ACTIVADO</span>
+            <span class="badge">SISTEMA VERSIÓN 3.0 (MODO TANQUE)</span>
             <h1>Redactor Académico Pro</h1>
-            <p>Motor: Llama 3.1 (Groq Cloud)</p>
+            <p>Buscando compatibilidad total con Groq</p>
         </header>
         <form id="pdfForm" action="/generar" method="POST">
             <div class="grid">
@@ -103,7 +102,7 @@ HTML_INTERFAZ = """
             <button type="submit" id="submitBtn">Generar Documento PDF</button>
             <div id="loading" class="loader">
                 <div class="spinner"></div>
-                <p><b>Groq está redactando...</b></p>
+                <p><b>Redactando trabajo final...</b></p>
             </div>
         </form>
     </div>
@@ -138,23 +137,34 @@ def limpiar_formato_ia(texto):
     return texto
 
 def generar_contenido_ia(tema, asignatura, instrucciones):
-    if not client: return "Error: No hay API KEY."
-    prompt = f"Redacta un informe académico formal sobre {tema} para {asignatura}. Instrucciones: {instrucciones}. Primera persona plural. Bibliografía APA 7."
+    if not client: return "Error: Configura la API KEY en Render."
+    prompt = f"Redacta un informe académico formal sobre {tema}. Asignatura: {asignatura}. Instrucciones: {instrucciones}. Primera persona plural. Bibliografía APA 7."
     
     try:
-        # EL ARREGLO DEFINITIVO: Acceso ultra-seguro al primer mensaje
         response = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model="llama-3.1-8b-instant",
             temperature=0.5
         )
-        # Si esto falla, el universo no tiene sentido
-        choices_list = getattr(response, 'choices', [])
-        if choices_list:
-            return choices_list.message.content
-        return "Error: La IA respondió con una lista vacía."
+        
+        # --- LÓGICA DE EXTRACCIÓN "TANQUE" (A PRUEBA DE FALLOS) ---
+        # 1. Intentar como Objeto (Estándar)
+        try:
+            return response.choices.message.content
+        except:
+            pass
+            
+        # 2. Intentar como Diccionario (Falla común en Render)
+        try:
+            resp_dict = response.model_dump()
+            return resp_dict['choices']['message']['content']
+        except:
+            pass
+            
+        return "La IA respondió pero no pudimos extraer el texto. Revisa la consola de Render."
+        
     except Exception as e:
-        return f"ERROR REAL DE LA IA: {str(e)}"
+        return f"ERROR CRÍTICO DE CONEXIÓN: {str(e)}"
 
 def crear_pdf(datos, contenido_ia):
     buffer = io.BytesIO()
@@ -165,24 +175,19 @@ def crear_pdf(datos, contenido_ia):
     st_body = ParagraphStyle('Body', parent=styles['Normal'], fontSize=11, leading=14, alignment=TA_JUSTIFY)
     elements = []
 
-    # UNIVERSIDAD Y LOGO
+    # Portada Profesional
     elements.append(Paragraph("<b>UNIVERSIDAD CATÓLICA DEL CIBAO (UCATECI)</b>", st_cent))
-    logo_path = os.path.join('static', 'logos', datos['logo_filename'])
-    if os.path.exists(logo_path):
-        elements.append(Spacer(1, 0.5*cm))
-        elements.append(Image(logo_path, width=3.5*cm, height=3.5*cm))
-    
     elements.append(Spacer(1, 1*cm))
     elements.append(Paragraph(f"<b>{datos.get('facultad', '')}</b>", st_bold))
     elements.append(Paragraph(f"<b>{datos.get('escuela', '')}</b>", st_bold))
-    elements.append(Spacer(1, 2*cm))
+    elements.append(Spacer(1, 3*cm))
     elements.append(Paragraph(f"<b>TEMA: {datos.get('tema', '').upper()}</b>", st_cent))
-    elements.append(Spacer(1, 2*cm))
-    elements.append(Paragraph("<b>Presentado por:</b>", st_bold))
+    elements.append(Spacer(1, 3*cm))
+    elements.append(Paragraph("<b>PRESENTADO POR:</b>", st_bold))
     elements.append(Paragraph(datos.get('estudiantes', '').replace('\n', '<br/>'), st_cent))
     elements.append(Spacer(1, 1*cm))
-    elements.append(Paragraph(f"<b>Docente:</b> {datos.get('profesor', '')}", st_cent))
-    elements.append(Spacer(1, 2*cm))
+    elements.append(Paragraph(f"<b>DOCENTE:</b> {datos.get('profesor', '')}", st_cent))
+    elements.append(Spacer(1, 3*cm))
     elements.append(Paragraph(f"La Vega, R.D. - {datetime.now().year}", st_cent))
     
     elements.append(PageBreak())
@@ -200,9 +205,9 @@ def generar():
         datos = request.form.to_dict()
         contenido = generar_contenido_ia(datos.get('tema', ''), datos.get('asignatura', ''), datos.get('instrucciones', ''))
         pdf = crear_pdf(datos, contenido)
-        return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name="Informe_Final.pdf")
+        return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name="Informe_Universitario.pdf")
     except Exception as e:
-        return f"Error crítico: {str(e)}", 500
+        return f"Error en el servidor: {str(e)}", 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))

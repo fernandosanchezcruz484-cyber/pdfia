@@ -199,8 +199,8 @@ def generar_contenido_ia(tema, asignatura, instrucciones):
     )
     
     try:
-        # Usamos el modelo ultra rápido y estable de Google
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # EL ARREGLO MÁGICO: Usamos el modelo universal y estable "gemini-pro"
+        model = genai.GenerativeModel('gemini-pro')
         response = model.generate_content(prompt)
         
         if response.text:

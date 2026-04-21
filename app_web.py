@@ -1,7 +1,6 @@
 import io
 import os
 import re
-import time
 from datetime import datetime
 from flask import Flask, request, send_file, render_template_string
 
@@ -11,7 +10,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 
-import g4f
+from g4f.client import Client
 
 app = Flask(__name__)
 
@@ -138,7 +137,7 @@ HTML_INTERFAZ = """
             <button type="submit" id="submitBtn">Generar Documento PDF</button>
             <div id="loading" class="loader">
                 <div class="spinner"></div>
-                <p><b>Investigando y redactando...</b><br>Esto tomará entre 30 y 60 segundos.</p>
+                <p><b>Investigando y redactando...</b><br>Esto puede tomar hasta un minuto.</p>
             </div>
         </form>
     </div>
@@ -194,31 +193,34 @@ def generar_contenido_ia(tema, asignatura, instrucciones):
         f"4. Al final añade 'Bibliografía' con 3 fuentes reales en APA 7."
     )
     
-    # Intento 1: Modelo Principal Automático
+    # NUEVO SISTEMA: G4F Client (Automático)
+    client = Client()
+    
     try:
-        response = g4f.ChatCompletion.create(
-            model="gpt-4", 
-            messages=[{"role": "user", "content": prompt}],
-            timeout=120
-        )
-        if response and len(response) > 50:
-            return response
-    except Exception:
-        pass
-
-    # Intento 2: Modelo de Respaldo Rápido
-    try:
-        response_b = g4f.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
-            timeout=120
         )
-        if response_b and len(response_b) > 50:
-            return response_b
-    except Exception:
+        contenido = response.choices.message.content
+        if contenido and len(contenido) > 50:
+            return contenido
+    except Exception as e:
+        print(f"Intento 1 falló: {e}")
+        pass
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        contenido = response.choices.message.content
+        if contenido and len(contenido) > 50:
+            return contenido
+    except Exception as e:
+        print(f"Intento 2 falló: {e}")
         pass
             
-    return "Error temporal. Los servidores de IA están saturados en este momento. Por favor, espera un minuto y dale al botón de generar nuevamente."
+    return "Error: Las IAs gratuitas han bloqueado la IP de este servidor en la nube permanentemente. Como desarrollador, el siguiente paso es conectar una API Key real (ej. Groq o Gemini) en lugar de usar G4F."
 
 def obtener_fecha_espanol():
     meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]

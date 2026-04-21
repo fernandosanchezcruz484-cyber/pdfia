@@ -202,7 +202,7 @@ def generar_contenido_ia(tema, asignatura, instrucciones):
     )
     
     try:
-        # EL CAMBIO ESTÁ AQUÍ: Usamos el modelo actual y activo "llama-3.1-8b-instant"
+        # CORRECCIÓN AQUÍ: Agregado el para acceder al mensaje correctamente
         response = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             model="llama-3.1-8b-instant", 

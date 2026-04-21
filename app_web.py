@@ -1,7 +1,6 @@
 import io
 import os
 import re
-import time
 from datetime import datetime
 from flask import Flask, request, send_file, render_template_string
 
@@ -138,7 +137,7 @@ HTML_INTERFAZ = """
             <button type="submit" id="submitBtn">Generar Documento PDF</button>
             <div id="loading" class="loader">
                 <div class="spinner"></div>
-                <p><b>Investigando y formateando documento...</b><br>Tardará unos 40 segundos.</p>
+                <p><b>Investigando y redactando (Proceso Profundo)...</b><br>Esto tomará entre 1 y 2 minutos. Por favor, no cierres la página.</p>
             </div>
         </form>
     </div>
@@ -172,7 +171,6 @@ HTML_INTERFAZ = """
 </html>
 """
 
-# --- PARSER DE MARKDOWN A REPORTLAB ---
 def limpiar_formato_ia(texto):
     texto = re.sub(r'(?m)^### (.*?)$', r'<br/><font size="12"><b>\1</b></font>', texto)
     texto = re.sub(r'(?m)^## (.*?)$', r'<br/><font size="14"><b>\1</b></font>', texto)
@@ -187,29 +185,40 @@ def generar_contenido_ia(tema, asignatura, instrucciones):
     prompt = (
         f"Eres un estudiante universitario realizando un trabajo final sobre: '{tema}'. "
         f"Asignatura: {asignatura}. "
-        f"Instrucciones del Docente a incluir/responder: {instrucciones if instrucciones else 'Desarrolla el tema de forma profunda.'}. "
+        f"Instrucciones a responder: {instrucciones if instrucciones else 'Desarrolla el tema de forma profunda.'}. "
         f"REGLAS: "
         f"1. Redacta en PRIMERA PERSONA DEL PLURAL ('Investigamos', 'Concluimos'). "
-        f"2. NADA de saludos, despídete con la Conclusión. "
+        f"2. NADA de saludos, inicia directo con el texto. "
         f"3. NO uses el símbolo ## para los títulos, simplemente usa **TÍTULO** en mayúsculas. "
-        f"4. Al final añade 'Bibliografía' con 3-5 fuentes reales en APA 7."
+        f"4. Al final añade 'Bibliografía' con 3 fuentes reales en APA 7."
     )
     
-    # SISTEMA DE REINTENTOS PARA EVITAR EL "FALLO DE CONEXIÓN"
-    for intento in range(3):
-        try:
-            response = g4f.ChatCompletion.create(
-                model="gpt-3.5-turbo", # Más rápido y estable
-                messages=[{"role": "user", "content": prompt}],
-                timeout=60
-            )
-            if response and len(response) > 50: # Validamos que la respuesta no esté vacía
-                return response
-        except Exception:
-            time.sleep(2) # Si falla, espera 2 segundos y vuelve a intentar
-            continue
+    # PLAN A: Usar el modelo robusto con un tiempo de espera muy largo
+    try:
+        response = g4f.ChatCompletion.create(
+            model=g4f.models.gpt_4, 
+            messages=[{"role": "user", "content": prompt}],
+            timeout=150 # 2 minutos y medio de espera para evitar bloqueos
+        )
+        if response and len(response) > 50:
+            return response
+    except Exception:
+        pass
+
+    # PLAN B: Si el principal falla, intentar con uno alternativo
+    try:
+        response_b = g4f.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            timeout=150
+        )
+        if response_b and len(response_b) > 50:
+            return response_b
+    except Exception:
+        pass
             
-    return "⚠️ Los servidores gratuitos de IA están saturados. Por favor, vuelve a la página anterior y dale al botón de generar nuevamente."
+    # Mensaje de error real (Solo si TODO falla)
+    return "Error de conexión con la IA. Los servidores detectaron mucho tráfico desde Render. Por favor, espera unos minutos y vuelve a intentarlo. (Código de error: G4F_TIMEOUT)"
 
 def obtener_fecha_espanol():
     meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -229,27 +238,20 @@ def crear_pdf(datos, contenido_ia):
 
     elements = []
 
-    # --- CORRECCIÓN DEFINITIVA DE LOS NOMBRES DE LA PORTADA ---
-    logo_file = datos.get('logo_filename', '')
-    if logo_file == 'ucateci.png':
-        uni_name = "Universidad Católica del Cibao"
-        uni_siglas = "(UCATECI)"
-    elif logo_file == 'pucmm.png':
-        uni_name = "Pontificia Universidad Católica Madre y Maestra"
-        uni_siglas = "(PUCMM)"
-    elif logo_file == 'uasd.png':
-        uni_name = "Universidad Autónoma de Santo Domingo"
-        uni_siglas = "(UASD)"
-    else:
-        uni_name = "Universidad"
-        uni_siglas = ""
+    # NOMBRES DINAMICOS
+    nombres_universidades = {
+        "ucateci.png": ["Universidad Católica del Cibao", "(UCATECI)"],
+        "pucmm.png": ["Pontificia Universidad Católica Madre y Maestra", "(PUCMM)"],
+        "uasd.png": ["Universidad Autónoma de Santo Domingo", "(UASD)"]
+    }
+    nombres = nombres_universidades.get(datos['logo_filename'], ["Universidad", ""])
 
-    elements.append(Paragraph(f"<b>{uni_name}</b>", st_cent))
-    if uni_siglas:
-        elements.append(Paragraph(f"<b>{uni_siglas}</b>", st_cent))
+    # PORTADA
+    elements.append(Paragraph(f"<b>{nombres}</b>", st_cent))
+    elements.append(Paragraph(f"<b>{nombres}</b>", st_cent))
     elements.append(Spacer(1, 0.2*cm))
 
-    logo_path = os.path.join('static', 'logos', logo_file)
+    logo_path = os.path.join('static', 'logos', datos['logo_filename'])
     if os.path.exists(logo_path):
         elements.append(Image(logo_path, width=3.5*cm, height=3.5*cm))
     
@@ -283,7 +285,7 @@ def crear_pdf(datos, contenido_ia):
 
     elements.append(PageBreak())
 
-    # --- CUERPO DEL INFORME CON FORMATO LIMPIO ---
+    # CUERPO DEL INFORME
     texto_formateado = limpiar_formato_ia(contenido_ia)
     elements.append(Paragraph(texto_formateado, st_body))
 
@@ -303,7 +305,7 @@ def generar():
         pdf = crear_pdf(datos, contenido)
         return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name="Trabajo_Final.pdf")
     except Exception as e:
-        return f"Error al generar PDF: {str(e)}", 500
+        return f"Error crítico: {str(e)}", 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))

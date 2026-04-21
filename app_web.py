@@ -1,102 +1,98 @@
 import io
 import os
 import re
-import traceback
 from datetime import datetime
 from flask import Flask, request, send_file, render_template_string
 
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak, HRFlowable
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
-from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 
 import g4f
 
 app = Flask(__name__)
 
-# --- INTERFAZ PREMIUM DINÁMICA ---
+# --- DISEÑO WEB PREMIUM ---
 HTML_INTERFAZ = """
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Asesor Académico Pro | Fernando Sánchez</title>
+    <title>Generador Académico Pro | Fernando Sánchez</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         
         :root {
-            --primary: #1e3a8a;
-            --accent: #b45309;
-            --bg: #f1f5f9;
+            --primary: #0f172a;
+            --accent: #3b82f6;
+            --bg: #e2e8f0;
         }
 
         body { 
             font-family: 'Plus Jakarta Sans', sans-serif; 
-            background: var(--bg); 
-            display: flex; justify-content: center; padding: 40px 20px; 
-            color: #0f172a;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            display: flex; justify-content: center; padding: 40px 15px; 
+            color: #0f172a; min-height: 100vh;
         }
 
         .card { 
-            background: white; padding: 45px; border-radius: 30px; 
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.1);
-            width: 100%; max-width: 680px; border: 1px solid #e2e8f0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 40px; border-radius: 20px; 
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15);
+            width: 100%; max-width: 700px; border: 1px solid rgba(255,255,255,0.5);
         }
 
-        header { text-align: center; margin-bottom: 35px; }
-        h1 { font-size: 32px; font-weight: 800; color: var(--primary); margin-bottom: 5px; letter-spacing: -1px; }
-        .badge { background: #dbeafe; color: var(--primary); padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+        header { text-align: center; margin-bottom: 30px; }
+        h1 { font-size: 30px; font-weight: 800; color: var(--primary); margin-bottom: 5px; }
+        .subtitle { color: #475569; font-size: 15px; font-weight: 500; }
 
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .form-group { margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
         .full { grid-column: span 2; }
 
-        label { display: block; margin-bottom: 8px; font-weight: 700; font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+        label { display: block; margin-bottom: 6px; font-weight: 700; font-size: 13px; color: #334155; text-transform: uppercase; }
         
         input, textarea, select { 
-            width: 100%; padding: 14px; border: 2px solid #f1f5f9; 
-            border-radius: 14px; font-size: 15px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            background: #f8fafc; font-family: inherit;
+            width: 100%; padding: 12px 15px; border: 2px solid #cbd5e1; 
+            border-radius: 12px; font-size: 14px; transition: all 0.3s ease;
+            background: #f8fafc; font-family: inherit; box-sizing: border-box;
         }
 
         input:focus, select:focus, textarea:focus { 
-            outline: none; border-color: var(--primary); background: white;
-            box-shadow: 0 0 0 4px rgba(30, 58, 138, 0.08);
+            outline: none; border-color: var(--accent); background: white;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
         }
 
         button { 
-            width: 100%; padding: 20px; background: var(--primary); color: white; 
-            border: none; border-radius: 18px; font-weight: 800; font-size: 16px;
-            cursor: pointer; transition: 0.3s; margin-top: 15px;
-            box-shadow: 0 10px 20px -5px rgba(30, 58, 138, 0.3);
+            width: 100%; padding: 18px; background: var(--primary); color: white; 
+            border: none; border-radius: 14px; font-weight: 800; font-size: 16px;
+            cursor: pointer; transition: 0.3s; margin-top: 10px;
         }
 
-        button:hover { background: #172554; transform: translateY(-3px); box-shadow: 0 20px 25px -5px rgba(30, 58, 138, 0.4); }
+        button:hover { background: var(--accent); transform: translateY(-2px); box-shadow: 0 10px 20px -5px rgba(59, 130, 246, 0.4); }
         
-        .loader { display: none; text-align: center; color: var(--primary); margin-top: 25px; }
-        .spinner { width: 30px; height: 30px; border: 4px solid #e2e8f0; border-top: 4px solid var(--primary); border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; }
+        .loader { display: none; text-align: center; color: var(--accent); margin-top: 20px; }
+        .spinner { width: 30px; height: 30px; border: 4px solid #e2e8f0; border-top: 4px solid var(--accent); border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        textarea { height: 110px; resize: none; }
     </style>
 </head>
 <body>
     <div class="card">
         <header>
-            <span class="badge">V3.0 Ultra Final</span>
-            <h1>Redactor Académico</h1>
-            <p style="color: #64748b;">Especializado en Ingenierías y Ciencias Sociales</p>
+            <h1>Redactor Académico Pro</h1>
+            <p class="subtitle">Generador Inteligente con Formato APA 7</p>
         </header>
         
         <form id="pdfForm" action="/generar" method="POST">
             <div class="grid">
                 <div class="form-group">
-                    <label>Logo Universidad:</label>
+                    <label>Universidad (Logo):</label>
                     <select name="logo_filename">
-                        <option value="ucateci.png">UCATECI (La Vega)</option>
+                        <option value="ucateci.png">UCATECI</option>
                         <option value="pucmm.png">PUCMM</option>
                         <option value="uasd.png">UASD</option>
                     </select>
@@ -117,27 +113,31 @@ HTML_INTERFAZ = """
                     </select>
                 </div>
                 <div class="form-group full">
-                    <label>Tema del Informe:</label>
-                    <input type="text" name="tema" placeholder="Ej. Implementación de Lean Manufacturing" required>
+                    <label>Tema de Investigación:</label>
+                    <input type="text" name="tema" placeholder="Ej. Presencialidad y estrés académico" required>
                 </div>
                 <div class="form-group">
                     <label>Asignatura:</label>
-                    <input type="text" name="asignatura" placeholder="Ej. Metodología II" required>
+                    <input type="text" name="asignatura" placeholder="Ej. Metodología de la investigación" required>
                 </div>
                 <div class="form-group">
-                    <label>Profesor(a):</label>
+                    <label>Docente:</label>
                     <input type="text" name="profesor" placeholder="Hipólita Cepeda (MES)" required>
                 </div>
                 <div class="form-group full">
+                    <label>Instrucciones / Preguntas a desarrollar:</label>
+                    <textarea name="instrucciones" placeholder="Pega aquí si el profesor pide responder preguntas específicas, un formato de puntos clave, etc."></textarea>
+                </div>
+                <div class="form-group full">
                     <label>Presentado por (Nombres y Matrículas):</label>
-                    <textarea name="estudiantes" placeholder="Fernando Sánchez, 2024-0777&#10;Juan Pérez, 2024-0123" required></textarea>
+                    <textarea name="estudiantes" style="height: 70px;" placeholder="Ashley Rashel Vargas, 2024-0811&#10;Fernando Sánchez, 2024-0777" required></textarea>
                 </div>
             </div>
 
-            <button type="submit" id="submitBtn">Generar Trabajo Final (1ra Persona)</button>
+            <button type="submit" id="submitBtn">Generar Documento PDF</button>
             <div id="loading" class="loader">
                 <div class="spinner"></div>
-                <p style="margin-top: 10px;"><b>Redactando informe profesional...</b><br>Esto tomará unos 40 segundos.</p>
+                <p><b>Investigando y formateando documento...</b><br>Tardará unos 40 segundos.</p>
             </div>
         </form>
     </div>
@@ -145,8 +145,8 @@ HTML_INTERFAZ = """
     <script>
         const escuelas = {
             "Facultad de las Ingenierías": ["Escuela de Ingeniería Industrial", "Escuela de Ingeniería de Sistemas", "Escuela de Ingeniería Civil", "Escuela de Arquitectura"],
-            "Facultad de Ciencias de la Salud": ["Escuela de Medicina", "Escuela de Enfermería", "Escuela de Bioanálisis"],
-            "Facultad de Ciencias Sociales": ["Escuela de Administración", "Escuela de Contabilidad", "Escuela de Derecho", "Escuela de Psicología"]
+            "Facultad de Ciencias de la Salud": ["Escuela de Medicina", "Escuela de Enfermería", "Escuela de Odontología"],
+            "Facultad de Ciencias Sociales": ["Escuela de Administración", "Escuela de Contabilidad", "Escuela de Psicología"]
         };
 
         function actualizarEscuelas() {
@@ -155,8 +155,7 @@ HTML_INTERFAZ = """
             esc.innerHTML = "";
             if (fac) {
                 escuelas[fac].forEach(e => {
-                    let op = document.createElement("option");
-                    op.value = e; op.text = e; esc.add(op);
+                    let op = document.createElement("option"); op.value = e; op.text = e; esc.add(op);
                 });
             } else {
                 esc.add(new Option("Elija primero la facultad", ""));
@@ -172,77 +171,107 @@ HTML_INTERFAZ = """
 </html>
 """
 
-def generar_contenido_ia(tema, asignatura):
+# --- PARSER DE MARKDOWN A REPORTLAB ---
+def limpiar_formato_ia(texto):
+    # 1. Quitar referencias
+    texto = re.sub(r'\', '', texto)
+    
+    # 2. Convertir títulos (## o ###) a etiquetas visuales grandes y en negrita
+    texto = re.sub(r'(?m)^### (.*?)$', r'<br/><font size="12"><b>\1</b></font>', texto)
+    texto = re.sub(r'(?m)^## (.*?)$', r'<br/><font size="14"><b>\1</b></font>', texto)
+    texto = re.sub(r'(?m)^# (.*?)$', r'<br/><font size="16"><b>\1</b></font>', texto)
+    
+    # 3. Convertir **negritas** a <b>negritas</b>
+    texto = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', texto)
+    
+    # 4. Convertir listas de guiones (- o *) a viñetas reales (•)
+    texto = re.sub(r'(?m)^[-*]\s+(.*?)$', r'• \1', texto)
+    
+    # 5. Convertir saltos de línea normales a HTML
+    texto = texto.replace('\n', '<br/>')
+    
+    # 6. Eliminar excesos de saltos de línea (para que no queden huecos feos)
+    texto = texto.replace('<br/><br/><br/>', '<br/><br/>')
+    
+    return texto
+
+def generar_contenido_ia(tema, asignatura, instrucciones):
     prompt = (
-        f"Eres un estudiante destacado de la Universidad UCATECI. Redacta un informe de investigación sobre: {tema}. "
+        f"Eres un estudiante universitario realizando un trabajo final sobre: '{tema}'. "
         f"Asignatura: {asignatura}. "
-        f"INSTRUCCIONES: 1. Redacta en PRIMERA PERSONA DEL PLURAL (Nosotros). "
-        f"2. Usa un tono académico, denso y profesional. 3. Sin preámbulos. "
-        f"4. Estructura: Introducción, Desarrollo por puntos y Conclusión. "
-        f"5. Al final incluye Bibliografía con 3 fuentes reales en APA 7."
+        f"Instrucciones del Docente a incluir/responder: {instrucciones if instrucciones else 'Desarrolla el tema de forma profunda.'}. "
+        f"REGLAS: "
+        f"1. Redacta en PRIMERA PERSONA DEL PLURAL ('Investigamos', 'Concluimos'). "
+        f"2. NADA de saludos, despídete con la Conclusión. "
+        f"3. NO uses el símbolo ## para los títulos, simplemente usa **TÍTULO** en mayúsculas. "
+        f"4. Al final añade 'Bibliografía' con 3-5 fuentes reales en APA 7."
     )
     try:
         response = g4f.ChatCompletion.create(model=g4f.models.gpt_4, messages=[{"role": "user", "content": prompt}])
-        return response if response else "Error: La IA no devolvió contenido."
+        return response if response else "Error en la generación."
     except Exception:
-        return "Fallo en la conexión con la IA. Por favor, intente de nuevo."
+        return "Fallo en la conexión. Reintente."
+
+def obtener_fecha_espanol():
+    meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    mes = meses[datetime.now().month - 1]
+    anio = datetime.now().year
+    return f"{mes} del {anio}"
 
 def crear_pdf(datos, contenido_ia):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, 
-                            rightMargin=2.54*cm, leftMargin=2.54*cm, 
-                            topMargin=2.5*cm, bottomMargin=2.5*cm)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2.54*cm, leftMargin=2.54*cm, topMargin=2*cm, bottomMargin=2*cm)
     
     styles = getSampleStyleSheet()
-    st_centrado = ParagraphStyle('Cent', parent=styles['Normal'], fontSize=12, alignment=TA_CENTER, leading=18)
-    st_bold_cent = ParagraphStyle('BoldCent', parent=st_centrado, fontName='Helvetica-Bold', fontSize=13)
-    st_tema = ParagraphStyle('Tema', parent=st_centrado, fontSize=15, fontName='Helvetica-Bold', leading=22)
-    st_body = ParagraphStyle('Body', parent=styles['Normal'], fontSize=11, leading=17, alignment=TA_JUSTIFY)
+    st_cent = ParagraphStyle('Cent', parent=styles['Normal'], fontSize=12, alignment=TA_CENTER, leading=16)
+    st_bold = ParagraphStyle('BoldC', parent=st_cent, fontName='Helvetica-Bold', fontSize=12)
+    st_tema = ParagraphStyle('Tema', parent=st_cent, fontSize=14, fontName='Helvetica-Bold', leading=18)
+    st_body = ParagraphStyle('Body', parent=styles['Normal'], fontSize=11, leading=16, alignment=TA_JUSTIFY)
 
     elements = []
 
-    # --- PORTADA ACADÉMICA ---
-    elements.append(Paragraph("<b>Universidad Católica del Cibao</b>", st_centrado))
-    elements.append(Paragraph("<b>(UCATECI)</b>", st_centrado))
-    elements.append(Spacer(1, 0.4*cm))
+    # --- PORTADA ACADÉMICA (ESPACIOS REDUCIDOS PARA CABER EN 1 PÁGINA) ---
+    elements.append(Paragraph("<b>Universidad Católica del Cibao</b>", st_cent))
+    elements.append(Paragraph("<b>(UCATECI)</b>", st_cent))
+    elements.append(Spacer(1, 0.2*cm))
 
     logo_path = os.path.join('static', 'logos', datos['logo_filename'])
     if os.path.exists(logo_path):
-        elements.append(Image(logo_path, width=4.2*cm, height=4.2*cm))
+        elements.append(Image(logo_path, width=3.5*cm, height=3.5*cm))
     
-    elements.append(Spacer(1, 0.8*cm))
-    elements.append(Paragraph(f"<b>{datos['facultad'].upper()}</b>", st_bold_cent))
-    elements.append(Paragraph(f"<b>{datos['escuela'].upper()}</b>", st_bold_cent))
+    elements.append(Spacer(1, 0.5*cm))
+    elements.append(Paragraph(f"<b>{datos['facultad']}</b>", st_bold))
+    elements.append(Paragraph(f"<b>{datos['escuela']}</b>", st_bold))
     
-    elements.append(Spacer(1, 3.2*cm))
-    elements.append(Paragraph("<b>Tema</b>", st_bold_cent))
-    elements.append(Spacer(1, 0.3*cm))
+    elements.append(Spacer(1, 1.5*cm))
+    elements.append(Paragraph("<b>Tema</b>", st_bold))
+    elements.append(Spacer(1, 0.2*cm))
     elements.append(Paragraph(datos['tema'], st_tema))
     
-    elements.append(Spacer(1, 2.2*cm))
-    elements.append(Paragraph("<b>Trabajo Final de la asignatura</b>", st_bold_cent))
-    elements.append(Paragraph(datos['asignatura'], st_centrado))
-    
-    elements.append(Spacer(1, 2*cm))
-    elements.append(Paragraph("<b>Presentado por:</b>", st_bold_cent))
-    for est in datos['estudiantes'].split('\n'):
-        elements.append(Paragraph(est.strip(), st_centrado))
-    
-    elements.append(Spacer(1, 1.8*cm))
-    elements.append(Paragraph("<b>Docente</b>", st_bold_cent))
-    elements.append(Paragraph(datos['profesor'], st_centrado))
+    elements.append(Spacer(1, 1.2*cm))
+    elements.append(Paragraph("<b>Trabajo Final de la asignatura</b>", st_bold))
+    elements.append(Paragraph(datos['asignatura'], st_cent))
     
     elements.append(Spacer(1, 1.2*cm))
-    elements.append(Paragraph(f"La Vega, R.D. / {datetime.now().strftime('%B %Y')}", st_centrado))
+    elements.append(Paragraph("<b>Presentado por:</b>", st_bold))
+    for est in datos['estudiantes'].split('\n'):
+        if est.strip():
+            elements.append(Paragraph(est.strip(), st_cent))
+    
+    elements.append(Spacer(1, 1.2*cm))
+    elements.append(Paragraph("<b>Docente</b>", st_bold))  # Neutro como pediste
+    elements.append(Paragraph(datos['profesor'], st_cent))
+    
+    elements.append(Spacer(1, 0.8*cm))
+    elements.append(Paragraph("La Vega, República Dominicana", st_cent))
+    elements.append(Paragraph(f"<b>Fecha</b>", st_bold))
+    elements.append(Paragraph(obtener_fecha_espanol(), st_cent)) # Español forzado
 
     elements.append(PageBreak())
 
-    # --- CUERPO DEL INFORME ---
-    txt_procesado = contenido_ia.replace("**", "<b>").replace("\n", "<br/>")
-    # Limpiador de códigos de cita si llegaran a aparecer
-    txt_procesado = re.sub(r'\', '', txt_procesado)
-    
-    elements.append(Paragraph(txt_procesado, st_body))
+    # --- CUERPO DEL INFORME CON FORMATO LIMPIO ---
+    texto_formateado = limpiar_formato_ia(contenido_ia)
+    elements.append(Paragraph(texto_formateado, st_body))
 
     doc.build(elements)
     buffer.seek(0)
@@ -256,11 +285,11 @@ def index():
 def generar():
     try:
         datos = request.form.to_dict()
-        contenido = generar_contenido_ia(datos['tema'], datos['asignatura'])
+        contenido = generar_contenido_ia(datos['tema'], datos['asignatura'], datos.get('instrucciones', ''))
         pdf = crear_pdf(datos, contenido)
-        return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name=f"Informe_{datetime.now().strftime('%Y%m%d')}.pdf")
+        return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name="Trabajo_Final.pdf")
     except Exception as e:
-        return f"Error crítico: {str(e)}", 500
+        return f"Error al generar PDF: {str(e)}", 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))

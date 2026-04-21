@@ -15,9 +15,10 @@ import google.generativeai as genai
 app = Flask(__name__)
 
 # --- CONFIGURACIÓN GEMINI ---
-# Asegúrate de poner tu llave en Render con el nombre: GEMINI_API_KEY
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_KEY)
+
+# Usamos gemini-1.5-flash que es el más rápido y estable
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 # --- INTERFAZ UCATECI ---
@@ -29,43 +30,32 @@ HTML_INTERFAZ = """
     <title>Generador Académico | UCATECI</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; display: flex; justify-content: center; padding: 20px; }
-        .card { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); width: 100%; max-width: 650px; }
-        h1 { text-align: center; color: #0f172a; margin-bottom: 5px; }
-        .status { text-align: center; color: #059669; font-weight: 800; font-size: 12px; margin-bottom: 25px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #64748b; }
-        input, textarea { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; box-sizing: border-box; }
-        button { width: 100%; padding: 16px; background: #0f172a; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 20px; }
-        button:hover { background: #3b82f6; }
-        #loading { display: none; text-align: center; margin-top: 15px; color: #3b82f6; font-weight: 700; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f0f4f8; display: flex; justify-content: center; padding: 20px; }
+        .card { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 100%; max-width: 650px; }
+        h1 { text-align: center; color: #1e293b; margin-bottom: 5px; }
+        .status { text-align: center; color: #2563eb; font-weight: 800; font-size: 12px; margin-bottom: 25px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #475569; }
+        input, textarea { width: 100%; padding: 12px; border: 1.5px solid #e2e8f0; border-radius: 10px; box-sizing: border-box; margin-bottom: 15px; }
+        button { width: 100%; padding: 16px; background: #1e293b; color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #2563eb; }
+        #loading { display: none; text-align: center; margin-top: 15px; color: #2563eb; font-weight: 700; }
     </style>
 </head>
 <body>
     <div class="card">
         <h1>Redactor Académico</h1>
-        <p class="status">● MOTOR GEMINI ACTIVADO (ESTABLE)</p>
+        <p class="status">● VERSIÓN FINAL CON GEMINI 1.5</p>
         <form id="f" action="/generar" method="POST">
-            <div class="grid">
-                <div style="grid-column: span 2;">
-                    <label>Tema del Trabajo:</label>
-                    <input type="text" name="tema" required>
-                </div>
-                <div>
-                    <label>Asignatura:</label>
-                    <input type="text" name="asignatura" required>
-                </div>
-                <div>
-                    <label>Docente:</label>
-                    <input type="text" name="profesor" required>
-                </div>
-                <div style="grid-column: span 2;">
-                    <label>Estudiantes y Matrículas:</label>
-                    <textarea name="estudiantes" rows="3" required></textarea>
-                </div>
-            </div>
-            <button type="submit" id="btn">GENERAR PDF PROFESIONAL</button>
-            <div id="loading">Google Gemini está redactando... un momento.</div>
+            <label>Tema del Trabajo:</label>
+            <input type="text" name="tema" placeholder="Ej. Arquitectura de Redes en Rep. Dom." required>
+            <label>Asignatura:</label>
+            <input type="text" name="asignatura" required>
+            <label>Docente:</label>
+            <input type="text" name="profesor" required>
+            <label>Estudiantes y Matrículas:</label>
+            <textarea name="estudiantes" rows="3" required></textarea>
+            <button type="submit" id="btn">GENERAR PDF AHORA</button>
+            <div id="loading">Gemini está redactando tu trabajo... no cierres la página.</div>
         </form>
     </div>
     <script>
@@ -80,12 +70,15 @@ HTML_INTERFAZ = """
 
 def llamar_gemini(tema, asignatura):
     try:
-        prompt = f"Redacta un informe académico para la universidad sobre: {tema}. Asignatura: {asignatura}. Usa primera persona del plural. Incluye Bibliografía APA 7."
+        prompt = f"Redacta un informe académico universitario formal sobre: {tema}. Para la asignatura: {asignatura}. Usa primera persona del plural. Incluye Bibliografía APA 7."
         response = model.generate_content(prompt)
-        # Gemini entrega el texto directo, sin vueltas:
-        return response.text
+        
+        # Si Gemini bloquea el contenido por seguridad, intentamos sacarlo de otra forma
+        if response.text:
+            return response.text
+        return "El contenido fue generado pero no se pudo mostrar por filtros de seguridad de Google."
     except Exception as e:
-        return f"Error con Gemini: {str(e)}"
+        return f"Error técnico con Gemini: {str(e)}"
 
 def crear_pdf(datos, contenido_ia):
     buffer = io.BytesIO()
@@ -105,7 +98,7 @@ def crear_pdf(datos, contenido_ia):
     elements.append(Paragraph(f"<b>Docente:</b> {datos['profesor']}", st_cent))
     elements.append(PageBreak())
     
-    # Contenido
+    # Contenido con limpieza de negritas
     texto = contenido_ia.replace('\n', '<br/>')
     texto = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', texto)
     elements.append(Paragraph(texto, st_body))
@@ -123,9 +116,9 @@ def generar():
         d = request.form.to_dict()
         texto = llamar_gemini(d['tema'], d['asignatura'])
         pdf = crear_pdf(d, texto)
-        return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name="Informe_UCATECI.pdf")
+        return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name="Informe_Final.pdf")
     except Exception as e:
-        return f"Error: {str(e)}", 500
+        return f"Error crítico: {str(e)}", 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))

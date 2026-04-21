@@ -182,8 +182,8 @@ def limpiar_formato_ia(texto):
     texto = texto.replace('\n', '<br/>')
     texto = texto.replace('<br/><br/><br/>', '<br/><br/>')
     
-    # CORRECCIÓN PARA RENDER (Sintaxis arreglada)
-    texto = re.sub(r'\\', '', texto)
+    # CORRECCIÓN PARA RENDER (Sintaxis blindada, reemplaza barras invertidas sin usar regex que pueda fallar)
+    texto = texto.replace('\\', '')
     
     return texto
 
